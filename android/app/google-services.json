@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "1024921234885",
+    "project_id": "labeouf-7235e",
+    "storage_bucket": "labeouf-7235e.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1024921234885:android:674a27a98768c85a53efac",
+        "android_client_info": {
+          "package_name": "com.gary.labeouf"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1024921234885-01vllnie0fiqvv21vn1ftun52r187tp2.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBy-8P-j_rauaCufu-4YRXwnUedNWWNQ-I"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1024921234885-01vllnie0fiqvv21vn1ftun52r187tp2.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

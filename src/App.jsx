@@ -1,164 +1,146 @@
-import React, { useState, useEffect } from 'react';
-import { db, auth } from './firebase'; 
-import { GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
-import { collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, doc, updateDoc, increment } from 'firebase/firestore';
-import { Heart, MessageSquare, Repeat, Share, LogOut, Image, Beef, Activity, Fingerprint, EyeOff, Globe, Radio } from 'lucide-react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import { collection, doc, setDoc, addDoc, onSnapshot, query, orderBy, limit } from 'firebase/firestore';
+import { db, auth } from './firebaseConfig';
+import { 
+  SystemIcon, Button, StatusIndicator, Card, SignalCard, 
+  SearchInput, HealthNode, PersistenceIndicator, InferenceLog, AuditRow, Sparkline 
+} from './Library';
 
-function App() {
-  const [moo, setMoo] = useState("");
-  const [feed, setFeed] = useState([]);
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true); // Fail-Safe Loading State
-  const [imgUrl, setImgUrl] = useState("");
-  const [showLinkInput, setShowLinkInput] = useState(false);
-  const [scope, setScope] = useState("GLOBAL");
-  
-  const LIMIT = 88;
+function useLocalStorage(key, initialValue) {
+  const [storedValue, setStoredValue] = useState(() => {
+    try {
+      const item = window.localStorage.getItem(key);
+      return item ? JSON.parse(item) : initialValue;
+    } catch (e) { return initialValue; }
+  });
+  const setValue = (v) => {
+    const val = v instanceof Function ? v(storedValue) : v;
+    setStoredValue(val);
+    window.localStorage.setItem(key, JSON.stringify(val));
+  };
+  return [storedValue, setValue];
+}
 
-  useEffect(() => {
-    // Auth Listener
-    const unsubAuth = onAuthStateChanged(auth, (u) => {
-      setUser(u);
-      setLoading(false); // Kill loading state once we know who the user is
-    });
-    
-    // Database Listener
-    const q = query(collection(db, "moos"), orderBy("createdAt", "desc"));
-    const unsubFeed = onSnapshot(q, (snapshot) => {
-      const now = new Date();
-      const moosData = snapshot.docs.map(d => {
-        const data = d.data();
-        const createdAt = data.createdAt?.toDate() || now;
-        const hoursOld = (now - createdAt) / (1000 * 60 * 60);
-        const heatScore = (data.likes || 0) / Math.pow((hoursOld + 2), 1.5);
-        return { ...data, id: d.id, heatScore };
-      });
+export default function App() {
+  const [currentView, setCurrentView] = useLocalStorage('node_view', 'feed');
+  const [searchQuery, setSearchQuery] = useLocalStorage('node_filter', '');
+  const [signals, setSignals] = useState([]);
+  const [newSignal, setNewSignal] = useState('');
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [inferenceData, setInferenceData] = useState([]);
+  const [logs, setLogs] = useState([{ id: 1, timestamp: new Date().toLocaleTimeString(), action: "Mobile_Init", status: "success" }]);
+  const [health, setHealth] = useState([
+    { service: 'Firebase_Cloud', status: 'operational', latency: 45 },
+    { service: 'Android_Native_Bridge', status: 'operational', latency: 2 }
+  ]);
 
-      const sortedByHeat = moosData.sort((a, b) => b.heatScore - a.heatScore);
-      setFeed(sortedByHeat);
-    }, (error) => {
-      console.error("Thermal Sync Error:", error);
-    });
-
-    return () => { unsubAuth(); unsubFeed(); };
+  const pushLog = useCallback((action, status = 'info') => {
+    setLogs(prev => [{ id: Date.now(), timestamp: new Date().toLocaleTimeString(), action, status }, ...prev].slice(0, 10));
   }, []);
 
-  const handlePostMoo = async (e) => {
-    e.preventDefault();
-    if (!moo.trim() || moo.length > LIMIT) return;
-    try {
-      await addDoc(collection(db, "moos"), {
-        content: moo.trim(), 
-        author: user.displayName, 
-        photo: user.photoURL, 
-        image: imgUrl.trim(),
-        uid: user.uid, 
-        createdAt: serverTimestamp(), 
-        likes: 0,
-        isRedacted: false,
-        node: "PHILADELPHIA_CLUSTER"
-      });
-      setMoo(""); setImgUrl(""); setShowLinkInput(false);
-    } catch (err) { console.error("Broadcast Error:", err); }
-  };
+  // PERSISTENCE OBSERVER
+  useEffect(() => {
+    setIsSyncing(true);
+    const t = setTimeout(() => setIsSyncing(false), 800);
+    return () => clearTimeout(t);
+  }, [currentView, searchQuery]);
 
-  const handleRedact = async (id) => {
-    await updateDoc(doc(db, "moos", id), { 
-      isRedacted: true,
-      content: "[REDACTED_BY_AUTHOR]",
-      image: "" 
+  // REAL-TIME DATA & SIMULATORS
+  useEffect(() => {
+    const unsub = onSnapshot(query(collection(db, 'signals'), orderBy('timestamp', 'desc'), limit(25)), (snap) => {
+      setSignals(snap.docs.map(d => ({ id: d.id, ...d.data(), timestamp: d.data().timestamp?.toDate().toLocaleTimeString() || "..." })));
     });
-  };
 
-  const isOver = moo.length > LIMIT;
+    const mlTimer = setInterval(() => {
+      const labels = ['Lion', 'Zebra', 'Elephant', 'Gazelle'];
+      setInferenceData(prev => [{
+        id: Date.now(), 
+        label: labels[Math.floor(Math.random() * labels.length)],
+        confidence: 0.75 + Math.random() * 0.2,
+        latency: Math.floor(Math.random() * 100) + 50
+      }, ...prev].slice(0, 4));
+    }, 5000);
+
+    return () => { unsub(); clearInterval(mlTimer); };
+  }, []);
+
+  const filteredSignals = useMemo(() => {
+    const q = searchQuery.toLowerCase().trim();
+    return q ? signals.filter(s => s.sender?.toLowerCase().includes(q) || s.message?.toLowerCase().includes(q)) : signals;
+  }, [signals, searchQuery]);
+
+  const transmit = async (e) => {
+    e.preventDefault();
+    if (!newSignal.trim()) return;
+    const msg = newSignal; setNewSignal('');
+    try {
+      await addDoc(collection(db, 'signals'), { sender: "MOBILE_ALPHA", message: msg, timestamp: new Date() });
+      pushLog("Signal_Sent", "success");
+    } catch (e) { pushLog("Transmit_Fail", "error"); }
+  };
 
   return (
-    <div className="min-h-screen bg-[#F1F3F5] pb-24 font-sans text-black">
-      {/* Navbar */}
-      <nav className="fixed top-0 left-0 w-full h-20 bg-white border-b-4 border-black z-50 flex items-center justify-between px-10">
-        <div className="flex items-center gap-4">
-          <Beef size={28} className="text-indigo-600" />
-          <h1 className="font-black text-2xl tracking-tighter uppercase italic">LABEOUF</h1>
+    <div className="flex flex-col h-screen bg-black text-zinc-400 font-sans select-none overflow-hidden">
+      {/* HEADER: iOS/Android Safe Area Support */}
+      <header className="px-6 pb-4 pt-[calc(env(safe-area-inset-top)+1rem)] border-b border-zinc-900 bg-black/90 backdrop-blur-md sticky top-0 z-50 flex justify-between items-center">
+        <div className="flex items-center gap-2">
+          <SystemIcon name="ShieldCheck" size={18} className="text-orange-600" glow />
+          <h1 className="text-sm font-black tracking-tighter text-white uppercase">LaBeouf_Mobile</h1>
         </div>
-        <div className="flex bg-slate-100 p-1 border border-black">
-          <button onClick={() => setScope("GLOBAL")} className={`px-4 py-1 text-[10px] font-black transition-all ${scope === "GLOBAL" ? 'bg-black text-white' : 'text-slate-400'}`}>GLOBAL</button>
-          <button onClick={() => setScope("LOCAL")} className={`px-4 py-1 text-[10px] font-black transition-all ${scope === "LOCAL" ? 'bg-black text-white' : 'text-slate-400'}`}>LOCAL_NODE</button>
+        <div className="flex items-center gap-3">
+          <PersistenceIndicator isSyncing={isSyncing} />
+          <StatusIndicator status="online" />
         </div>
-      </nav>
+      </header>
 
-      <main className="max-w-2xl mx-auto pt-32 px-6">
-        {loading ? (
-          /* State 0: System Booting */
-          <div className="flex flex-col items-center justify-center py-40">
-            <Activity className="animate-spin text-indigo-600 mb-4" size={48} />
-            <span className="tag-mono animate-pulse">INITIALIZING_PROTOCOL...</span>
-          </div>
-        ) : user ? (
-          /* State 1: Authenticated View */
-          <>
-            <div className={`industrial-card border-t-8 ${isOver ? 'border-t-red-600' : 'border-t-black'}`}>
-              <div className="flex justify-between items-center mb-6 text-slate-400">
-                <span className="tag-mono">CONFRONTATION_BUFFER</span>
-                <span className="font-mono text-xs font-black">{LIMIT - moo.length}</span>
+      {/* VIEWPORT */}
+      <main className="flex-1 overflow-y-auto px-5 py-6 pb-32">
+        <div className="space-y-6 max-w-lg mx-auto">
+          {currentView === 'feed' ? (
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                <Card title="ML_Stream">
+                  <div className="space-y-1">{inferenceData.map(i => <InferenceLog key={i.id} {...i} />)}</div>
+                </Card>
+                <Card title="Network">
+                  <div className="flex items-center justify-between mt-2">
+                    <span className="text-lg font-black text-white">45ms</span>
+                    <Sparkline data={[40, 55, 45, 60, 42]} color="#10b981" />
+                  </div>
+                </Card>
               </div>
-              <form onSubmit={handlePostMoo}>
-                <textarea 
-                  className="w-full bg-transparent border-none focus:ring-0 text-black placeholder-[#ADB5BD] text-6xl font-black uppercase tracking-tighter leading-[0.85] resize-none overflow-hidden"
-                  placeholder="START BEEF"
-                  rows="2"
-                  value={moo}
-                  onChange={(e) => setMoo(e.target.value)}
-                />
-                <div className="flex justify-between items-center mt-12 pt-8 border-t-2 border-black/5">
-                  <div className="flex gap-4">
-                    <button type="button" onClick={() => setShowLinkInput(!showLinkInput)} className="text-slate-300 hover:text-black transition-colors"><Image size={24} /></button>
-                    <button type="button" onClick={() => signOut(auth)} className="text-slate-300 hover:text-red-600 transition-colors"><LogOut size={24} /></button>
-                  </div>
-                  <button type="submit" disabled={isOver || !moo.trim()} className="btn-moo">Moo</button>
-                </div>
-              </form>
-            </div>
 
-            <div className="space-y-6 mt-12">
-              {feed.map((item, index) => (
-                <div key={item.id} className={`industrial-card group border-l-8 transition-all ${item.isRedacted ? 'opacity-40 grayscale' : 'border-l-black'}`}>
-                  <div className="flex justify-between items-center mb-6">
-                    <div className="flex items-center gap-3">
-                      <img src={item.photo} className="w-8 h-8 grayscale border border-black" alt="id" />
-                      <span className="font-black text-[11px] uppercase tracking-widest text-slate-400">@{item.author}</span>
-                    </div>
-                    {user?.uid === item.uid && !item.isRedacted && (
-                      <button onClick={() => handleRedact(item.id)} className="text-slate-200 hover:text-red-600"><EyeOff size={16} /></button>
-                    )}
-                  </div>
-                  <p className="text-display">{item.content}</p>
-                  <div className="flex justify-between items-center mt-8 pt-4 border-t border-black/5">
-                    <button onClick={() => updateDoc(doc(db, "moos", item.id), { likes: increment(1) })} className="tag-mono flex items-center gap-2">
-                      <Heart size={16} className={item.likes > 0 ? 'fill-red-500 text-red-500' : 'text-slate-200'} />
-                      <span className="text-black">{item.likes || 0}</span>
-                    </button>
-                    <span className="tag-mono text-[8px] opacity-30">RANK_{String(index + 1).padStart(2, '0')}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </>
-        ) : (
-          /* State 2: Identification Required */
-          <div className="industrial-card text-center py-24 border-8 border-double border-black bg-white shadow-[12px_12px_0px_rgba(0,0,0,1)]">
-            <h2 className="text-5xl font-black uppercase tracking-tighter mb-8 leading-none">Authentication <br/> Required</h2>
-            <p className="tag-mono mb-10 opacity-60 italic">IDENTITY_VERIFICATION_PENDING</p>
-            <button 
-              onClick={() => signInWithPopup(auth, new GoogleAuthProvider())} 
-              className="btn-moo text-2xl px-12 py-6 bg-black text-white hover:bg-indigo-600"
-            >
-              Sign In with Google
-            </button>
-          </div>
-        )}
+              <Card title="Broadcast">
+                <form onSubmit={transmit} className="space-y-3">
+                  <textarea className="w-full bg-black border border-zinc-800 p-3 text-white text-xs h-20 outline-none focus:border-orange-500 font-mono" placeholder="SIGNAL_DATA..." value={newSignal} onChange={e => setNewSignal(e.target.value)} />
+                  <Button type="submit" icon="Send" className="w-full">Transmit</Button>
+                </form>
+              </Card>
+
+              <div className="space-y-3">
+                <SearchInput value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
+                {filteredSignals.map(s => <SignalCard key={s.id} {...s} />)}
+              </div>
+            </>
+          ) : (
+            <Card title="System_Audit">
+              <div className="space-y-1">{logs.map(l => <AuditRow key={l.id} {...l} />)}</div>
+            </Card>
+          )}
+        </div>
       </main>
+
+      {/* NAV: Thumb-Friendly Bottom Bar */}
+      <nav className="fixed bottom-0 left-0 right-0 h-[calc(env(safe-area-inset-bottom)+4rem)] bg-zinc-950 border-t border-zinc-900 flex justify-around items-start pt-3 z-50">
+        <button onClick={() => setCurrentView('feed')} className={`flex flex-col items-center gap-1 ${currentView === 'feed' ? 'text-orange-500' : 'text-zinc-800'}`}>
+          <SystemIcon name="Activity" glow={currentView === 'feed'} />
+          <span className="text-[7px] font-black uppercase">Feed</span>
+        </button>
+        <button onClick={() => setCurrentView('audit')} className={`flex flex-col items-center gap-1 ${currentView === 'audit' ? 'text-orange-500' : 'text-zinc-800'}`}>
+          <SystemIcon name="Terminal" glow={currentView === 'audit'} />
+          <span className="text-[7px] font-black uppercase">Audit</span>
+        </button>
+      </nav>
     </div>
   );
 }
-
-export default App;
