@@ -1,79 +1,47 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
+/* --- RESET & APP-LOCK --- */
 :root {
-  color-scheme: dark;
+  --safe-top: env(safe-area-inset-top);
+  --safe-bottom: env(safe-area-inset-bottom);
 }
 
-body {
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent; /* Removes the gray flash when clicking buttons */
+  -webkit-touch-callout: none; /* Prevents "Save Image" popups on long-press */
+  user-select: none; /* Prevents text highlighting across the app */
+}
+
+html, body {
   margin: 0;
-  background-color: #000000;
-  color: #d4d4d8; /* zinc-300 */
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  overflow-x: hidden;
+  padding: 0;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden; /* Stops the whole page from bouncing/scrolling */
+  background-color: #000;
+  color: #0f0; /* Terminal Green */
+  font-family: 'Courier New', Courier, monospace;
 }
 
-/* --- CUSTOM ANIMATIONS --- */
-
-@keyframes scan {
-  from { transform: translateY(-100%); }
-  to { transform: translateY(500%); }
+/* --- THE MAIN VIEWPORT --- */
+#root {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  padding-top: var(--safe-top); /* Handles the iPhone Notch */
+  padding-bottom: var(--safe-bottom); /* Handles the Home Indicator */
 }
 
-.animate-scan {
-  animation: scan 3s linear infinite;
+/* --- ALLOW INPUTS TO BEHAVE NORMALLY --- */
+textarea, input {
+  user-select: text !important;
+  -webkit-user-select: text !important;
+  outline: none;
 }
 
-/* Subtle pulse for the status indicators */
-@keyframes status-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
-}
-
-.status-pulse {
-  animation: status-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-}
-
-/* --- DEFENSIVE UI OVERRIDES --- */
-
-/* Custom Scrollbar for the Industrial Look */
-::-webkit-scrollbar {
-  width: 6px;
-}
-
-::-webkit-scrollbar-track {
-  background: #09090b; /* zinc-950 */
-}
-
-::-webkit-scrollbar-thumb {
-  background: #27272a; /* zinc-800 */
-  border-radius: 0px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: #ea580c; /* orange-600 */
-}
-
-/* High-contrast Selection */
-::selection {
-  background-color: rgba(234, 88, 12, 0.3); /* orange-600 with transparency */
-  color: #ffffff;
-}
-
-/* Utility class for CRT-style text flicker (Optional) */
-.text-flicker {
-  text-shadow: 0 0 2px rgba(234, 88, 12, 0.3);
-}
-
-/* --- TAILWIND LAYER ADDITIONS --- */
-@layer base {
-  input:-webkit-autofill,
-  input:-webkit-autofill:hover, 
-  input:-webkit-autofill:focus {
-    -webkit-text-fill-color: white;
-    -webkit-box-shadow: 0 0 0px 1000px #000000 inset;
-    transition: background-color 5000s ease-in-out 0s;
-  }
+/* --- SCROLLABLE CONTENT AREA --- */
+.scroll-container {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch; /* High-speed native scrolling feel */
 }

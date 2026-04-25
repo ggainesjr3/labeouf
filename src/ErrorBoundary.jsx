@@ -1,73 +1,103 @@
 import React from 'react';
-import { Button, SystemIcon } from './Library';
 
 class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
-    this.state = { hasError: false, errorLog: "" };
+    this.state = { hasError: false };
   }
 
   static getDerivedStateFromError(error) {
-    // Update state so the next render shows the fallback UI.
-    return { hasError: true, errorLog: error.toString() };
+    // Update state so the next render will show the fallback UI.
+    return { hasError: true };
   }
 
   componentDidCatch(error, errorInfo) {
-    // In a production app, you'd send this to a service like Sentry
-    console.error("KERNEL_PANIC_LOG:", error, errorInfo);
+    // Log the error to the console for terminal-style diagnostics
+    console.error("SYSTEM_CRITICAL_FAILURE:", error, errorInfo);
   }
 
   render() {
     if (this.state.hasError) {
+      // Brutalist Fallback UI
       return (
-        <div className="min-h-screen bg-black flex items-center justify-center p-8 font-sans">
-          <div className="relative border border-red-900/30 bg-red-950/5 p-12 max-w-xl w-full overflow-hidden">
-            {/* Background Decorative Element */}
-            <div className="absolute -top-24 -right-24 w-64 h-64 bg-red-600/5 rounded-full blur-3xl"></div>
-            
-            <div className="relative z-10 text-center">
-              <SystemIcon name="AlertOctagon" size={48} className="text-red-600 mx-auto mb-6" glow />
-              
-              <h2 className="text-white font-black uppercase tracking-tighter text-3xl mb-2">
-                Kernel_Panic
-              </h2>
-              
-              <div className="flex items-center justify-center gap-2 mb-8">
-                <div className="h-[1px] w-12 bg-red-900/50"></div>
-                <span className="text-red-500 font-mono text-[10px] uppercase tracking-[0.2em]">
-                  Runtime_Exception_Detected
-                </span>
-                <div className="h-[1px] w-12 bg-red-900/50"></div>
-              </div>
-
-              <div className="bg-black/50 border border-red-900/20 p-4 mb-10 text-left">
-                <p className="text-red-800 font-mono text-[10px] leading-relaxed break-all">
-                  {this.state.errorLog}
-                </p>
-              </div>
-              
-              <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <Button 
-                  onClick={() => window.location.reload()}
-                  icon="RefreshCw"
-                >
-                  Reboot_Node
-                </Button>
-                <Button 
-                  variant="outline" 
-                  onClick={() => this.setState({ hasError: false })}
-                >
-                  Attempt_Recovery
-                </Button>
-              </div>
-            </div>
+        <div style={errorContainer}>
+          <div style={terminalHeader}>ERROR_LOG_v1.0.4</div>
+          <h1 style={massiveTextStyle}>[!] SYSTEM_HALT</h1>
+          <p style={subTextStyle}>UNRECOVERABLE_ERROR_IN_DATA_STREAM</p>
+          <div style={codeBox}>
+            STATUS_CODE: 0x505_UI_CRASH
+            <br />
+            LOCATION: {window.location.pathname.toUpperCase()}
           </div>
+          <button 
+            onClick={() => window.location.reload()} 
+            style={retryButton}
+          >
+            INITIALIZE_SYSTEM_REBOOT
+          </button>
         </div>
       );
     }
 
-    return this.props.children;
+    return this.props.children; 
   }
 }
+
+// --- STYLING (INDUSTRIAL / DEFENSIVE) ---
+const errorContainer = {
+  backgroundColor: '#900', // Warning Red
+  color: '#fff',
+  height: '100vh',
+  display: 'flex',
+  flexDirection: 'column',
+  justifyContent: 'center',
+  alignItems: 'center',
+  fontFamily: 'monospace',
+  padding: '20px',
+  textAlign: 'center',
+  boxSizing: 'border-box'
+};
+
+const terminalHeader = {
+  position: 'absolute',
+  top: 0,
+  left: 0,
+  padding: '10px',
+  fontSize: '0.8rem',
+  color: 'rgba(255,255,255,0.5)'
+};
+
+const massiveTextStyle = {
+  fontSize: '4rem',
+  margin: '0',
+  letterSpacing: '-3px',
+  fontWeight: '900'
+};
+
+const subTextStyle = {
+  fontSize: '1rem',
+  marginTop: '10px',
+  letterSpacing: '2px'
+};
+
+const codeBox = {
+  border: '1px solid #fff',
+  padding: '15px',
+  margin: '30px 0',
+  fontSize: '0.9rem',
+  backgroundColor: 'rgba(0,0,0,0.2)'
+};
+
+const retryButton = {
+  backgroundColor: '#fff',
+  color: '#900',
+  border: 'none',
+  padding: '15px 30px',
+  fontWeight: 'bold',
+  cursor: 'pointer',
+  fontSize: '1rem',
+  fontFamily: 'monospace',
+  boxShadow: '5px 5px 0px #000'
+};
 
 export default ErrorBoundary;
