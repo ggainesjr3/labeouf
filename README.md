@@ -1,75 +1,74 @@
-LABEOUF // INDUSTRIAL_BEEF_PROTOCOL
+🛡️ LaBeouf: Tactical Trust-Audit Terminal
 
-LaBeouf is a brutalist social experiment built to prioritize real-time confrontation and social discovery. It strips away the bloat of modern social media, enforcing an 88-character limit and a "Thermal Velocity" ranking system that ensures only the freshest "Beef" stays at the top of the feed.
-🛠 THE STACK: "SPEED-TO-MARKET" ARCHITECTURE
+LaBeouf is a high-fidelity social media clone and security auditing tool. It combines a Brutalist/Industrial UI with a Machine Learning backend to monitor data streams for misinformation and linguistic anomalies in real-time.
+🚀 Deployment & Environment
 
-I chose a BaaS (Backend as a Service) model to optimize for speed, cost-efficiency, and horizontal scalability.
+    Host Environment: Linux (Ubuntu/Debian) – Host: rosencrantz
 
-    Frontend: React + Vite (The "Storefront")
+    Frontend: React.js (Mobile-First / Standalone PWA)
 
-    Styling: Tailwind CSS (Utility-first design system)
+    Backend: Firebase (Firestore, Authentication, Hosting)
 
-    Backend: Firebase (The "Bartender" & Data Cellar)
+    ML Integration: BERT-based Trust Guard (Natural Language Processing)
 
-    Ranking Engine: Custom Thermal Decay Algorithm
+📱 Cross-Platform Strategy
+iOS Deployment (PWA Handshake)
 
-    Icons: Lucide-React (Industrial Weighting: 2.5px)
+Bypassing the need for a MacBook/Xcode, LaBeouf utilizes a Progressive Web App strategy to achieve a native feel on iPhone.
 
-🏗 TECHNICAL DESIGN: "THE BAR" ANALOGY
+    Standalone Mode: Configured via manifest.json to remove browser UI and unlock system-level APIs.
 
-I approached the architecture by comparing it to a busy sports bar:
+    Tactical Handshake: Implemented a manual "User Gesture" trigger to unlock iOS Web Push Notifications.
 
-    The Moo: A drink order (The core data packet).
+    Safe-Area Optimization: Custom CSS boundaries to protect UI elements from the iOS "Notch" and home indicator.
 
-    The Feed: The chalkboard listing every order for the room to see.
+Android Deployment
 
-    The User: The patron with a unique ID (OAuth 2.0 Passport).
+    Deployed as a PWA via Chrome, allowing for deep integration with Android's notification listener.
 
-    Firebase: The bartender who pulls the "Moo" from the back so the user never has to touch the kegs.
+    Responsive Brutalist Grid adapts to varying screen densities across the Android ecosystem.
 
-🧠 ENGINEERING LOGIC & MATHEMATICS
-1. Thermal Velocity (The Heat Engine)
+🧠 Trust Guard AI (The Core)
 
-To prevent the feed from becoming stale, I implemented a Descending Chronological Indexing system modified by a decay function. Instead of simple sorting, the "Heat" of a post is calculated as:
-Score=(Age+2)1.5Likes​
+The application features a proprietary auditing layer that scans every post before it hits the global stream.
 
-This ensures that a new "Moo" with 5 likes outranks a day-old post with 50 likes. I call this Molten Incident Logic—as the score crosses a threshold, the UI reactively shifts to an orange, pulsing state.
-2. The Denormalization Trick
+    Heuristic Analysis: Detects "All-Caps" spamming, repetitive character patterns, and common disinformation triggers.
 
-To ensure O(1) time complexity for feed rendering, I used Denormalization. Rather than making the computer take extra "trips" to look up a user's name via an ID, I store the authorHandle directly inside every Moo document. This results in sub-second latency for the end user.
-3. Server-Side Data Integrity
+    BERT Integration: Evaluates linguistic bias and assigns a TrustScore to each packet of data.
 
-To handle high-concurrency likes, I avoided client-side math (which is prone to "Race Conditions"). Instead, I utilized Atomic Increments (increment(1)), shifting the burden of mathematical accuracy to the server to prevent data corruption.
-⚡️ TROUBLESHOOTING & PIVOTS
+    Global Threat Level: A rolling calculation of "Anomalies" vs "Verified" logs that updates the system's global state (LOW, ELEVATED, CRITICAL).
 
-    The Identity Pivot: I implemented OAuth 2.0 via Firebase Auth, outsourcing security risks to Google. This moved the project from "mock data" to a production-ready identity system where every Moo is cryptographically linked to a verified UID.
+🏗️ Defensive Engineering Patterns
 
-    Resource Quota Management: When hitting Spark Tier limitations, I conducted a cost-benefit analysis and pivoted from binary storage to Referential Image Handling. By storing image URLs rather than raw files, I maintained a rich media experience while keeping infrastructure overhead at zero.
+Designed for stability and reliability, the codebase follows strict defensive protocols:
 
-    Module Resolution: Resolved complex Vite resolution errors by auditing the dependency tree and implementing a Singleton Pattern for Firebase service initialization, ensuring unified service references across the React tree.
+    Input Sanitization: Every log entry is scrubbed for malicious scripts before being committed to Firestore.
 
-🚀 INSTALLATION & NODE SETUP
+    Error Boundaries: Prevents application-wide crashes by isolating component failures within the UI.
 
-This project is built to be Idempotent—you can run the setup from zero and get the exact same result every time.
+    Null-Safety: Robust handling of Firebase Auth states to ensure "ANON_OPERATOR" fallbacks for unauthenticated data streams.
 
-    Clone the environment:
-    Bash
+🛠️ Tech Stack
 
-    git clone https://github.com/ggainesjr3/labeouf.git
-    cd labeouf
+    Styling: Custom Brutalist CSS (High-Contrast, Tactical Industrial Aesthetics)
 
-    Initialize Dependencies:
-    Bash
+    Database: Cloud Firestore (Real-time NoSQL)
 
-    npm install
+    Analytics: Integrated "Anomalies" counter for live stream auditing.
 
-    Configure Environment: Create a .env file with your Firebase Project Credentials (API Key, Auth Domain, etc.).
+Installation (Linux Environment)
+Bash
 
-    Launch Node:
-    Bash
+# Clone the repository
+git clone https://github.com/gary-edward/labeouf.git
 
-    npm run dev
+# Install dependencies
+npm install
 
-Current Project Status: PHASE_01_COMPLETE // Node: Philadelphia Cluster (Simulated)
+# Build production bundle
+npm run build
 
-Lead Engineer: Gary Edward Gaines, Jr. (@rosencrantz)
+# Deploy to Firebase Hosting
+firebase deploy --only hosting
+
+Developed by Gary Edward Gaines, Jr. Software & Machine Learning Engineering (Novice) Philadelphia, PA / Southern NJ

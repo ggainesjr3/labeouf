@@ -9,17 +9,14 @@ const Feed = ({ user }) => {
   const [newPostText, setNewPostText] = useState('');
   const [isScanning, setIsScanning] = useState(false);
   const [globalThreat, setGlobalThreat] = useState('LOW');
+  const [notifStatus, setNotifStatus] = useState(Notification.permission);
 
   useEffect(() => {
-    // Initialize notification permissions on mount
-    requestNotificationPermission();
-
     const q = query(collection(db, 'posts'), orderBy('createdAt', 'desc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const fetchedPosts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setPosts(fetchedPosts);
 
-      // --- THREAT DETECTION LOGIC ---
       const suspiciousCount = fetchedPosts.filter(p => !p.isVerified).length;
       const ratio = suspiciousCount / (fetchedPosts.length || 1);
       
@@ -27,21 +24,23 @@ const Feed = ({ user }) => {
       if (ratio > 0.5) newThreat = 'CRITICAL';
       else if (ratio > 0.2) newThreat = 'ELEVATED';
 
-      // DEFENSIVE TRIGGER: Push notification if threat escalates to CRITICAL
       if (newThreat === 'CRITICAL' && globalThreat !== 'CRITICAL') {
         if (Notification.permission === "granted") {
           new Notification("[!] SYSTEM_ALERT", {
             body: "CRITICAL threat level detected. Security audit required.",
-            tag: "threat-alert", // Overwrites previous alerts to prevent spam
-            silent: false
+            tag: "threat-alert"
           });
         }
       }
-      
       setGlobalThreat(newThreat);
     });
     return () => unsubscribe();
-  }, [globalThreat]); // Track threat state changes
+  }, [globalThreat]);
+
+  const handleManualNotif = async () => {
+    const result = await requestNotificationPermission();
+    setNotifStatus(result);
+  };
 
   const handlePost = async (e) => {
     e.preventDefault();
@@ -54,7 +53,7 @@ const Feed = ({ user }) => {
         await addDoc(collection(db, 'posts'), {
           text: newPostText,
           uid: user.uid,
-          userName: user.displayName || 'ANON_OPERATOR',
+          userName: user.displayName || 'OPERATOR',
           createdAt: serverTimestamp(),
           trustScore: trustResults.score,
           isVerified: trustResults.isVerified,
@@ -70,9 +69,22 @@ const Feed = ({ user }) => {
     <div style={appContainer}>
       <header style={headerStyle}>
         <div style={statusCard(globalThreat)}>
-          <span style={labelStyle}>SYSTEM_THREAT_LEVEL</span>
+          <div style={statusHeader}>
+            <span style={labelStyle}>SYSTEM_THREAT_LEVEL</span>
+            {/* Minimalist Notif Indicator */}
+            <span style={notifIndicator(notifStatus)}>
+              {notifStatus === 'granted' ? "● UPLINK_ACTIVE" : "○ UPLINK_OFFLINE"}
+            </span>
+          </div>
           <div style={massiveStatus}>{globalThreat}</div>
         </div>
+
+        {notifStatus !== 'granted' && (
+          <button onClick={handleManualNotif} style={notifButtonStyle}>
+            ACTIVATE_TACTICAL_ALERTS
+          </button>
+        )}
+
         <div style={miniStatRow}>
           <div style={statBox}>
             <span style={labelStyle}>LOGS</span>
@@ -87,16 +99,16 @@ const Feed = ({ user }) => {
 
       <main className="scroll-container" style={scrollArea}>
         <form onSubmit={handlePost} style={formStyle}>
-          <div style={terminalHeaderStyle}>SECURE_UPLINK_v2.1</div>
+          <div style={terminalHeaderStyle}>SECURE_UPLINK_v3.0</div>
           <textarea
             value={newPostText}
             onChange={(e) => setNewPostText(e.target.value)}
-            placeholder="TYPE_MESSAGE_FOR_ANALYSIS..."
+            placeholder="INPUT_DATA_STREAM..."
             style={textareaStyle}
             disabled={isScanning}
           />
           <button type="submit" style={isScanning ? scanningButtonStyle : postButtonStyle}>
-            {isScanning ? ">>> ANALYZING_VECTORS..." : "DISPATCH_DATA"}
+            {isScanning ? ">>> ANALYZING..." : "DISPATCH"}
           </button>
         </form>
 
@@ -106,7 +118,7 @@ const Feed = ({ user }) => {
               <div style={logMetaStyle}>
                 <span>SRC: {post.userName?.toUpperCase()}</span>
                 <span style={post.isVerified ? {color: '#0f0'} : {color: '#f00'}}>
-                  [{post.isVerified ? "VERIFIED" : "WARNING"}]
+                  {post.isVerified ? "VERIFIED" : "!! THREAT !!"}
                 </span>
               </div>
               <p style={textStyle}>{post.text}</p>
@@ -118,28 +130,33 @@ const Feed = ({ user }) => {
   );
 };
 
-// --- STYLES (Locked for Mobile) ---
-const appContainer = { display: 'flex', flexDirection: 'column', height: '100%', width: '100%', backgroundColor: '#000' };
-const headerStyle = { padding: '10px', borderBottom: '2px solid #333', backgroundColor: '#000', zIndex: 10 };
-const scrollArea = { flex: 1, padding: '15px', paddingBottom: '40px' };
+// --- REFINED STYLES ---
+const appContainer = { display: 'flex', flexDirection: 'column', height: '100vh', width: '100vw', backgroundColor: '#000', overflow: 'hidden' };
+const headerStyle = { padding: '12px', borderBottom: '1px solid #222' };
+const scrollArea = { flex: 1, padding: '12px', overflowY: 'auto', WebkitOverflowScrolling: 'touch' };
+const statusHeader = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' };
 const statusCard = (level) => ({
-  border: '2px solid #fff', padding: '10px 15px', marginBottom: '10px',
-  backgroundColor: level === 'CRITICAL' ? '#900' : level === 'ELEVATED' ? '#960' : '#000',
-  transition: 'background-color 0.5s ease'
+  border: '1px solid #fff', padding: '12px', marginBottom: '10px',
+  backgroundColor: level === 'CRITICAL' ? '#400' : level === 'ELEVATED' ? '#320' : '#0a0a0a',
+  transition: 'background-color 0.4s ease'
 });
-const miniStatRow = { display: 'flex', gap: '10px' };
-const statBox = { flex: 1, border: '1px solid #444', padding: '8px', backgroundColor: '#111' };
-const labelStyle = { fontSize: '0.6rem', color: '#888', fontWeight: 'bold', display: 'block' };
-const massiveStatus = { fontSize: '1.4rem', fontWeight: '900', letterSpacing: '-1px' };
-const smallValue = { fontSize: '1.1rem', fontFamily: 'monospace' };
-const formStyle = { border: '1px solid #333', marginBottom: '20px', backgroundColor: '#000' };
-const terminalHeaderStyle = { background: '#222', padding: '4px 10px', fontSize: '0.6rem', color: '#888' };
-const textareaStyle = { width: '100%', height: '70px', background: '#000', color: '#0f0', border: 'none', padding: '10px', boxSizing: 'border-box', fontFamily: 'monospace', fontSize: '16px' };
-const postButtonStyle = { width: '100%', padding: '12px', background: '#fff', border: 'none', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.9rem' };
-const scanningButtonStyle = { ...postButtonStyle, background: '#444', color: '#888' };
+const notifIndicator = (status) => ({
+  fontSize: '0.5rem', color: status === 'granted' ? '#0f0' : '#f00', fontWeight: 'bold'
+});
+const massiveStatus = { fontSize: '1.8rem', fontWeight: '900', color: '#fff' };
+const notifButtonStyle = { width: '100%', padding: '10px', background: '#0f0', color: '#000', border: 'none', fontWeight: 'bold', fontSize: '0.7rem', marginBottom: '10px' };
+const miniStatRow = { display: 'flex', gap: '8px' };
+const statBox = { flex: 1, border: '1px solid #222', padding: '6px', background: '#050505' };
+const labelStyle = { fontSize: '0.55rem', color: '#555', fontWeight: 'bold' };
+const smallValue = { fontSize: '1rem', color: '#eee', fontFamily: 'monospace' };
+const formStyle = { border: '1px solid #222', marginBottom: '20px' };
+const terminalHeaderStyle = { background: '#111', padding: '4px 10px', fontSize: '0.55rem', color: '#444' };
+const textareaStyle = { width: '100%', height: '60px', background: '#000', color: '#0f0', border: 'none', padding: '10px', boxSizing: 'border-box', fontSize: '16px', outline: 'none' };
+const postButtonStyle = { width: '100%', padding: '12px', background: '#eee', color: '#000', border: 'none', fontWeight: 'bold' };
+const scanningButtonStyle = { ...postButtonStyle, background: '#222', color: '#444' };
 const logListStyle = { display: 'flex', flexDirection: 'column', gap: '8px' };
-const logEntryStyle = { border: '1px solid #222', padding: '10px', backgroundColor: '#050505' };
-const logMetaStyle = { fontSize: '0.65rem', marginBottom: '4px', display: 'flex', justifyContent: 'space-between', opacity: 0.8 };
-const textStyle = { margin: 0, fontSize: '0.9rem', lineHeight: '1.3' };
+const logEntryStyle = { borderLeft: '2px solid #222', padding: '8px 12px', background: '#050505' };
+const logMetaStyle = { fontSize: '0.55rem', color: '#444', display: 'flex', justifyContent: 'space-between', marginBottom: '4px' };
+const textStyle = { margin: 0, fontSize: '0.85rem', color: '#bbb' };
 
 export default Feed;
