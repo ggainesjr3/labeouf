@@ -1,12 +1,6 @@
 {
-  "firestore": {
-    "database": "(default)",
-    "location": "nam5",
-    "rules": "labeouf-7235e",
-    "indexes": "firestore.indexes.json"
-  },
   "hosting": {
-    "public": "dist",
+    "public": "build",
     "ignore": [
       "firebase.json",
       "**/.*",
