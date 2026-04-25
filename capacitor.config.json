@@ -1,5 +1,5 @@
 {
   "appId": "com.gary.labeouf",
   "appName": "labeouf",
-  "webDir": "dist"
+  "webDir": "build"
 }
