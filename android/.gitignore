@@ -1,0 +1,45 @@
+# Dependencies
+node_modules/
+/.pnp
+.pnp.js
+
+# Testing
+/coverage
+
+# Production Build (Web)
+/dist
+/build
+
+# Android Specific (The Big Ones)
+android/.gradle/
+android/build/
+android/app/build/
+android/capacitor-cordova-android-plugins/build/
+android/local.properties
+android/app/release/
+android/app/debug/
+*.apk
+*.aar
+*.jks
+*.keystore
+
+# Capacitor Generated Files
+android/app/src/main/assets/public/
+android/app/src/main/assets/capacitor.config.json
+
+# Environment / Secrets
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?

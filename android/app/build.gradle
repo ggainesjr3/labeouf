@@ -1,0 +1,89 @@
+apply plugin: 'com.android.application'
+
+// --- 1. THE DUPLICATE CLASS KILLER ---
+// This prevents the "kotlin-stdlib-jdk8 found in modules" error
+configurations.all {
+    exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-jdk7'
+    exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-jdk8'
+    
+    resolutionStrategy {
+        force "org.jetbrains.kotlin:kotlin-stdlib:1.8.22"
+    }
+}
+
+android {
+    namespace "com.gary.labeouf"
+    compileSdk 35
+
+    defaultConfig {
+        applicationId "com.gary.labeouf"
+        minSdk 23 
+        targetSdk 35
+        versionCode 1
+        versionName "1.0"
+
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        aaptOptions {
+             noCompress 'tflite', 'lite'
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    packagingOptions {
+        resources {
+            excludes += '/META-INF/{AL2.0,LGPL2.1}'
+            excludes += 'META-INF/kotlin-stdlib-jdk7.kotlin_module'
+            excludes += 'META-INF/kotlin-stdlib-jdk8.kotlin_module'
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_21
+        targetCompatibility JavaVersion.VERSION_21
+    }
+}
+
+repositories {
+    flatDir {
+        dirs 'libs'
+    }
+}
+
+dependencies {
+    implementation fileTree(dir: 'libs', include: ['*.jar'])
+    implementation 'androidx.appcompat:appcompat:1.7.0'
+    implementation project(':capacitor-android')
+    
+    // Unified Kotlin library
+    implementation "org.jetbrains.kotlin:kotlin-stdlib:1.8.22"
+
+    if (findProject(':capacitor-cordova-android-plugins') != null) {
+        implementation project(':capacitor-cordova-android-plugins')
+    }
+
+    testImplementation 'junit:junit:4.13.2'
+    androidTestImplementation 'androidx.test.ext:junit:1.2.1'
+    androidTestImplementation 'androidx.test.espresso:espresso-core:3.6.1'
+}
+
+// --- 2. CAPACITOR BRIDGE ---
+def capacitorBuildGradle = file('capacitor.build.gradle')
+if (capacitorBuildGradle.exists()) {
+    apply from: capacitorBuildGradle
+}
+
+// --- 3. GOOGLE SERVICES (Optional) ---
+try {
+    def servicesJSON = file('google-services.json')
+    if (servicesJSON.exists()) {
+        apply plugin: 'com.google.gms.google-services'
+    }
+} catch(Exception e) {
+    logger.warn("google-services.json issue: ${e.message}")
+}

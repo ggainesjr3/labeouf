@@ -3,76 +3,77 @@
 @tailwind utilities;
 
 :root {
-  background-color: #F1F3F5;
+  color-scheme: dark;
 }
 
-@layer components {
-  .industrial-card {
-    background-color: white;
-    border: 4px solid black;
-    padding: 2rem;
-    box-shadow: 8px 8px 0px rgba(0,0,0,1);
-    transition: all 0.2s ease;
-  }
-
-  .text-display {
-    font-size: 3.75 closed; /* 6xl equivalent */
-    font-weight: 900;
-    text-transform: uppercase;
-    letter-spacing: -0.05em;
-    line-height: 0.85;
-    color: black;
-  }
-
-  .tag-mono {
-    font-family: monospace;
-    font-weight: 900;
-    font-size: 0.75rem;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-  }
-
-  .btn-moo {
-    background-color: black;
-    color: white;
-    padding: 0.5rem 1.5rem;
-    font-weight: 900;
-    text-transform: uppercase;
-    letter-spacing: -0.025em;
-    transition: all 0.2s ease;
-    border: none;
-  }
-
-  .btn-moo:hover:not(:disabled) {
-    background-color: #4f46e5; /* indigo-600 */
-    transform: translate(-2px, -2px);
-    box-shadow: 4px 4px 0px rgba(0,0,0,1);
-  }
-
-  .btn-moo:disabled {
-    opacity: 0.2;
-    cursor: not-allowed;
-  }
+body {
+  margin: 0;
+  background-color: #000000;
+  color: #d4d4d8; /* zinc-300 */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
 }
 
-/* Standard CSS Overrides to prevent Build Errors */
-textarea::placeholder {
-  color: #e2e8f0 !important; /* slate-200 */
+/* --- CUSTOM ANIMATIONS --- */
+
+@keyframes scan {
+  from { transform: translateY(-100%); }
+  to { transform: translateY(500%); }
 }
 
-input:focus, 
-textarea:focus {
-  outline: none !important;
-  box-shadow: none !important;
-  ring: 0 !important;
+.animate-scan {
+  animation: scan 3s linear infinite;
 }
 
-/* Hide scrollbars for the industrial aesthetic */
-textarea::-webkit-scrollbar {
-  display: none;
+/* Subtle pulse for the status indicators */
+@keyframes status-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
 }
 
-textarea {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
+.status-pulse {
+  animation: status-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* --- DEFENSIVE UI OVERRIDES --- */
+
+/* Custom Scrollbar for the Industrial Look */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #09090b; /* zinc-950 */
+}
+
+::-webkit-scrollbar-thumb {
+  background: #27272a; /* zinc-800 */
+  border-radius: 0px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #ea580c; /* orange-600 */
+}
+
+/* High-contrast Selection */
+::selection {
+  background-color: rgba(234, 88, 12, 0.3); /* orange-600 with transparency */
+  color: #ffffff;
+}
+
+/* Utility class for CRT-style text flicker (Optional) */
+.text-flicker {
+  text-shadow: 0 0 2px rgba(234, 88, 12, 0.3);
+}
+
+/* --- TAILWIND LAYER ADDITIONS --- */
+@layer base {
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover, 
+  input:-webkit-autofill:focus {
+    -webkit-text-fill-color: white;
+    -webkit-box-shadow: 0 0 0px 1000px #000000 inset;
+    transition: background-color 5000s ease-in-out 0s;
+  }
 }

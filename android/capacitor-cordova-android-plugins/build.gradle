@@ -1,0 +1,49 @@
+// This file is managed by Capacitor. 
+// It bridges your Cordova plugins into the Android project.
+
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'com.android.tools.build:gradle:8.2.1'
+    }
+}
+
+apply plugin: 'com.android.library'
+
+android {
+    namespace "test.plugin.namespace" // Placeholder that Capacitor overrides
+    compileSdk 35
+
+    defaultConfig {
+        minSdk 22
+        targetSdk 35
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_21
+        targetCompatibility JavaVersion.VERSION_21
+    }
+}
+
+repositories {
+    google()
+    mavenCentral()
+    flatDir {
+        dirs 'libs'
+    }
+}
+
+dependencies {
+    implementation fileTree(dir: 'libs', include: ['*.jar'])
+    implementation project(':capacitor-android')
+    implementation 'androidx.appcompat:appcompat:1.7.0'
+}
+
+// This line allows Capacitor to inject the specific plugin logic
+// without creating a circular loop back to the :app module.
+if (file('capacitor.build.gradle').exists()) {
+    apply from: 'capacitor.build.gradle'
+}
