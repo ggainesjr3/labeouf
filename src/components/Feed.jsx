@@ -1,8 +1,12 @@
-import React, { useState, useEffect } from 'react';
-import { db } from '../firebase';
+import React, { useState, useEffect, useRef } from 'react';
+import { db, storage } from '../firebase';
 import { collection, addDoc, query, orderBy, onSnapshot, serverTimestamp } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { analyzePostTrust } from '../utils/trustGuard';
 import { requestNotificationPermission } from '../utils/notifications';
+
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
 
 const Feed = ({ user }) => {
   const [posts, setPosts] = useState([]);
@@ -10,6 +14,10 @@ const Feed = ({ user }) => {
   const [isScanning, setIsScanning] = useState(false);
   const [globalThreat, setGlobalThreat] = useState('LOW');
   const [notifStatus, setNotifStatus] = useState(Notification.permission);
+  const [selectedImage, setSelectedImage] = useState(null);
+  const [imagePreviewUrl, setImagePreviewUrl] = useState(null);
+  const [uploadError, setUploadError] = useState(null);
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     const q = query(collection(db, 'posts'), orderBy('createdAt', 'desc'));
@@ -42,15 +50,53 @@ const Feed = ({ user }) => {
     setNotifStatus(result);
   };
 
+  const handleImageSelect = (e) => {
+    const file = e.target.files?.[0];
+    setUploadError(null);
+    if (!file) return;
+
+    if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+      setUploadError('REJECTED: Only JPG, PNG, GIF, WEBP accepted.');
+      return;
+    }
+    if (file.size > MAX_FILE_SIZE) {
+      setUploadError('REJECTED: File exceeds 5 MB limit.');
+      return;
+    }
+
+    setSelectedImage(file);
+    setImagePreviewUrl(URL.createObjectURL(file));
+  };
+
+  const clearSelectedImage = () => {
+    setSelectedImage(null);
+    if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
+    setImagePreviewUrl(null);
+    setUploadError(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const uploadImage = async (file) => {
+    const filename = `${Date.now()}_${file.name}`;
+    const storageRef = ref(storage, `post-images/${filename}`);
+    await uploadBytes(storageRef, file);
+    return getDownloadURL(storageRef);
+  };
+
   const handlePost = async (e) => {
     e.preventDefault();
-    if (!newPostText.trim()) return;
+    if (!newPostText.trim() && !selectedImage) return;
     setIsScanning(true);
     
     setTimeout(async () => {
       const trustResults = analyzePostTrust(newPostText);
       try {
-        await addDoc(collection(db, 'posts'), {
+        let imageUrl = null;
+        if (selectedImage) {
+          imageUrl = await uploadImage(selectedImage);
+        }
+
+        const postData = {
           text: newPostText,
           uid: user.uid,
           userName: user.displayName || 'OPERATOR',
@@ -58,8 +104,12 @@ const Feed = ({ user }) => {
           trustScore: trustResults.score,
           isVerified: trustResults.isVerified,
           flags: trustResults.flags
-        });
+        };
+        if (imageUrl) postData.imageUrl = imageUrl;
+
+        await addDoc(collection(db, 'posts'), postData);
         setNewPostText('');
+        clearSelectedImage();
       } catch (err) { console.error(err); }
       finally { setIsScanning(false); }
     }, 800);
@@ -107,9 +157,34 @@ const Feed = ({ user }) => {
             style={textareaStyle}
             disabled={isScanning}
           />
-          <button type="submit" style={isScanning ? scanningButtonStyle : postButtonStyle}>
-            {isScanning ? ">>> ANALYZING..." : "DISPATCH"}
-          </button>
+
+          {imagePreviewUrl && (
+            <div style={previewContainerStyle}>
+              <img src={imagePreviewUrl} alt="Attachment preview" style={previewImageStyle} />
+              <button type="button" onClick={clearSelectedImage} style={removeImageBtnStyle}>✕</button>
+            </div>
+          )}
+          {uploadError && <div style={uploadErrorStyle}>{uploadError}</div>}
+
+          <div style={composerActionsStyle}>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/gif,image/webp"
+              onChange={handleImageSelect}
+              style={{ display: 'none' }}
+            />
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              style={attachButtonStyle}
+              disabled={isScanning}
+              title="Attach image"
+            >📎</button>
+            <button type="submit" style={isScanning ? scanningButtonStyle : postButtonStyle}>
+              {isScanning ? ">>> ANALYZING..." : "DISPATCH"}
+            </button>
+          </div>
         </form>
 
         <div style={logListStyle}>
@@ -122,6 +197,9 @@ const Feed = ({ user }) => {
                 </span>
               </div>
               <p style={textStyle}>{post.text}</p>
+              {post.imageUrl && (
+                <img src={post.imageUrl} alt="Post attachment" style={postImageStyle} />
+              )}
             </div>
           ))}
         </div>
@@ -154,6 +232,13 @@ const terminalHeaderStyle = { background: '#111', padding: '4px 10px', fontSize:
 const textareaStyle = { width: '100%', height: '60px', background: '#000', color: '#0f0', border: 'none', padding: '10px', boxSizing: 'border-box', fontSize: '16px', outline: 'none' };
 const postButtonStyle = { width: '100%', padding: '12px', background: '#eee', color: '#000', border: 'none', fontWeight: 'bold' };
 const scanningButtonStyle = { ...postButtonStyle, background: '#222', color: '#444' };
+const composerActionsStyle = { display: 'flex', alignItems: 'stretch' };
+const attachButtonStyle = { padding: '12px 16px', background: '#111', border: 'none', borderRight: '1px solid #222', cursor: 'pointer', fontSize: '1.1rem', lineHeight: 1 };
+const previewContainerStyle = { position: 'relative', padding: '8px', background: '#0a0a0a', borderTop: '1px solid #222' };
+const previewImageStyle = { maxHeight: '120px', maxWidth: '100%', objectFit: 'contain', display: 'block', border: '1px solid #333' };
+const removeImageBtnStyle = { position: 'absolute', top: '4px', right: '4px', background: '#f00', color: '#fff', border: 'none', width: '22px', height: '22px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.75rem', lineHeight: '22px', textAlign: 'center', padding: 0 };
+const uploadErrorStyle = { padding: '4px 10px', background: '#400', color: '#f66', fontSize: '0.6rem', fontWeight: 'bold' };
+const postImageStyle = { marginTop: '8px', maxWidth: '100%', maxHeight: '300px', objectFit: 'contain', display: 'block', border: '1px solid #222' };
 const logListStyle = { display: 'flex', flexDirection: 'column', gap: '8px' };
 const logEntryStyle = { borderLeft: '2px solid #222', padding: '8px 12px', background: '#050505' };
 const logMetaStyle = { fontSize: '0.55rem', color: '#444', display: 'flex', justifyContent: 'space-between', marginBottom: '4px' };
