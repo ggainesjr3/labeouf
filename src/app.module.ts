@@ -15,6 +15,8 @@ import { UploadController } from './upload.controller';
 import { BookmarksController } from './bookmarks.controller';
 import { ReportsController } from './reports.controller';
 import { ModerationLogController } from './moderation-log.controller';
+import { HealthController } from './health.controller';
+import { typeOrmModuleConfig, entities } from './database.config';
 
 import { MaintenanceService } from './maintenance.service';
 import { NotificationService } from './notification.service';
@@ -33,18 +35,6 @@ import { JwtAuthGuard } from './jwt-auth.guard';
 import { AdminGuard } from './admin.guard';
 import { AdminNotFoundGuard } from './admin-not-found.guard';
 
-import { Audit } from './audit.entity';
-import { User } from './user.entity';
-import { Post } from './post.entity';
-import { Like } from './like.entity';
-import { Follow } from './follow.entity';
-import { Reply } from './reply.entity';
-import { Repost } from './repost.entity';
-import { Message } from './message.entity';
-import { Bookmark } from './bookmark.entity';
-import { Report } from './report.entity';
-import { ModerationLog } from './moderation-log.entity';
-
 @Module({
   imports: [
     ScheduleModule.forRoot(),
@@ -54,23 +44,8 @@ import { ModerationLog } from './moderation-log.entity';
       secret: process.env.JWT_SECRET ?? 'labeouf-secret-change-in-prod',
       signOptions: { expiresIn: '7d' },
     }),
-    TypeOrmModule.forRoot({
-      type: 'postgres',
-      host: process.env.DATABASE_HOST,
-      port: parseInt(process.env.DATABASE_PORT ?? '5432', 10),
-      username: process.env.DATABASE_USER,
-      password: process.env.DATABASE_PASSWORD,
-      database: process.env.DATABASE_NAME,
-      entities: [
-        Audit, User, Post, Like, Follow, Reply, Repost,
-        Message, Bookmark, Report, ModerationLog,
-      ],
-      synchronize: true,
-    }),
-    TypeOrmModule.forFeature([
-      Audit, User, Post, Like, Follow, Reply, Repost,
-      Message, Bookmark, Report, ModerationLog,
-    ]),
+    TypeOrmModule.forRoot(typeOrmModuleConfig),
+    TypeOrmModule.forFeature(entities),
   ],
   controllers: [
     AppController,
@@ -83,6 +58,7 @@ import { ModerationLog } from './moderation-log.entity';
     BookmarksController,
     ReportsController,
     ModerationLogController,
+    HealthController,
   ],
   providers: [
     MaintenanceService,
@@ -97,7 +73,7 @@ import { ModerationLog } from './moderation-log.entity';
     ModerationLogService,
     BrainService,
     JwtStrategy,
-    GoogleStrategy,
+    ...(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET ? [GoogleStrategy] : []),
     JwtAuthGuard,
     AdminGuard,
     AdminNotFoundGuard,

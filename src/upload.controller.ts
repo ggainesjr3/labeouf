@@ -218,6 +218,10 @@ export class UploadController {
       }
     }
 
-    return { url: `/uploads/${file.filename}` };
+    return {
+      url: `/uploads/${file.filename}`,
+      type: IMAGE_MIMES.has(file.mimetype) ? 'image' : 'video',
+      size,
+    };
   }
 }
