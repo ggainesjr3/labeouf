@@ -1,13 +1,30 @@
 import React from 'react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { AdminPage, Composer, PostCard } from './App.jsx';
+import { AdminPage, Composer, LoadError, PostCard } from './App.jsx';
 
 function fileOf(name, type, size = 1024) {
   const file = new File(['x'], name, { type });
   Object.defineProperty(file, 'size', { value: size });
   return file;
 }
+
+describe('LoadError', () => {
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+  });
+
+  it('shows a retry action for recoverable load failures', () => {
+    const onRetry = vi.fn();
+    render(<LoadError title="Could not load feed" message="HTTP 500" onRetry={onRetry} />);
+
+    expect(screen.getByText('Could not load feed')).toBeInTheDocument();
+    expect(screen.getByText('HTTP 500')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(onRetry).toHaveBeenCalledTimes(1);
+  });
+});
 
 describe('Composer', () => {
   let originalCreateObjectURL;
@@ -202,6 +219,32 @@ describe('Composer', () => {
 });
 
 describe('PostCard', () => {
+  it('hydrates interaction buttons from post viewer state', () => {
+    const { container } = render(
+      <PostCard
+        post={{
+          id: 9,
+          text: 'stateful post',
+          timestamp: new Date().toISOString(),
+          author: { username: 'gary' },
+          isLiked: true,
+          isReposted: true,
+          isBookmarked: true,
+          likeCount: 2,
+          repostCount: 1,
+        }}
+        token="token"
+        onNavigate={vi.fn()}
+        currentUser={{ username: 'gary' }}
+      />,
+    );
+
+    const [likeButton, repostButton, bookmarkButton] = container.querySelectorAll('article button');
+    expect(likeButton).toHaveStyle({ color: '#ec4899' });
+    expect(repostButton).toHaveStyle({ color: '#4ade80' });
+    expect(bookmarkButton).toHaveStyle({ color: '#eab308' });
+  });
+
   it('renders image before video and navigates when a hashtag is clicked', () => {
     const onNavigate = vi.fn();
     const { container } = render(

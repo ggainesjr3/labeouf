@@ -57,6 +57,24 @@ function AuditBadge({ meta }) {
   );
 }
 
+export function LoadError({ title = "Something went wrong", message, onRetry }) {
+  return (
+    <div style={{ padding: 40, textAlign: "center", color: "#4a5568" }}>
+      <p style={{ fontFamily: "'Sora', sans-serif", fontSize: 18, fontWeight: 700, color: "#f87171", marginBottom: 8 }}>{title}</p>
+      <p style={{ fontSize: 14, margin: "0 auto 16px", maxWidth: 360, lineHeight: 1.5 }}>{message || "The request failed. Try again in a moment."}</p>
+      {onRetry && (
+        <button
+          type="button"
+          onClick={onRetry}
+          style={{ background: "#1d9bf0", color: "#fff", border: "none", borderRadius: 9999, padding: "9px 18px", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "'Sora', sans-serif" }}
+        >
+          Retry
+        </button>
+      )}
+    </div>
+  );
+}
+
 const HASHTAG_SPLIT_RE = /(#[A-Za-z0-9_]+)/g;
 
 export function PostTextWithHashtags({ text, onNavigate }) {
@@ -98,6 +116,8 @@ export function PostTextWithHashtags({ text, onNavigate }) {
 function HashtagPage({ tag, token, onNavigate, currentUser }) {
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [retryKey, setRetryKey] = useState(0);
 
   useEffect(() => {
     if (!tag) {
@@ -106,13 +126,17 @@ function HashtagPage({ tag, token, onNavigate, currentUser }) {
       return;
     }
     let cancelled = false;
+    setError(null);
     setLoading(true);
     apiFetch(`/posts/hashtag/${encodeURIComponent(tag)}`, token)
       .then((data) => {
         if (!cancelled) setPosts(Array.isArray(data) ? data : []);
       })
-      .catch(() => {
-        if (!cancelled) setPosts([]);
+      .catch((e) => {
+        if (!cancelled) {
+          setPosts([]);
+          setError(e.message || "Could not load this hashtag.");
+        }
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -120,13 +144,16 @@ function HashtagPage({ tag, token, onNavigate, currentUser }) {
     return () => {
       cancelled = true;
     };
-  }, [tag, token]);
+  }, [tag, token, retryKey]);
 
   if (!tag) {
     return <div style={{ padding: 40, textAlign: "center", color: "#4a5568" }}>Invalid hashtag.</div>;
   }
   if (loading) {
     return <div style={{ padding: 40, textAlign: "center", color: "#4a5568", fontFamily: "'DM Mono', monospace", fontSize: 13 }}>Loading...</div>;
+  }
+  if (error) {
+    return <LoadError title={`Could not load #${tag}`} message={error} onRetry={() => setRetryKey(k => k + 1)} />;
   }
   if (!posts.length) {
     return <div style={{ padding: 40, textAlign: "center", color: "#4a5568" }}>No posts for #{tag}.</div>;
@@ -142,9 +169,9 @@ function HashtagPage({ tag, token, onNavigate, currentUser }) {
 }
 
 export function PostCard({ post, token, onNavigate, currentUser, onBookmarkChange }) {
-  const [liked, setLiked] = useState(false);
+  const [liked, setLiked] = useState(!!post.isLiked);
   const [likeCount, setLikeCount] = useState(post.likeCount ?? 0);
-  const [reposted, setReposted] = useState(false);
+  const [reposted, setReposted] = useState(!!post.isReposted);
   const [repostCount, setRepostCount] = useState(post.repostCount ?? 0);
   const [bookmarked, setBookmarked] = useState(!!post.isBookmarked);
   const [showReplies, setShowReplies] = useState(false);
@@ -155,15 +182,20 @@ export function PostCard({ post, token, onNavigate, currentUser, onBookmarkChang
   const isPanic = post.auditMetadata?.label === "CRITICAL_ANOMALY";
 
   useEffect(() => {
+    setLiked(!!post.isLiked);
+    setReposted(!!post.isReposted);
     setBookmarked(!!post.isBookmarked);
-  }, [post.id, post.isBookmarked]);
+    setLikeCount(post.likeCount ?? 0);
+    setRepostCount(post.repostCount ?? 0);
+  }, [post.id, post.isLiked, post.isReposted, post.isBookmarked, post.likeCount, post.repostCount]);
 
   const handleLike = async (e) => {
     e.stopPropagation();
     if (!token) return;
     try {
       const data = await apiFetch(`/posts/${post.id}/like`, token, { method: "POST" });
-      setLikeCount(data.likeCount); setLiked(p => !p);
+      setLikeCount(data.likeCount);
+      setLiked(data.liked);
     } catch {}
   };
 
@@ -520,21 +552,36 @@ export function Composer({ token, onPost }) {
 function Feed({ token, newPost, onNavigate, currentUser }) {
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [retryKey, setRetryKey] = useState(0);
 
   useEffect(() => {
+    let cancelled = false;
     const fetchFeed = async () => {
+      setLoading(true);
+      setError(null);
       try {
         const data = await apiFetch(token ? "/posts/feed" : "/posts/public", token);
-        setPosts(Array.isArray(data) ? data : []);
-      } catch {}
-      setLoading(false);
+        if (!cancelled) setPosts(Array.isArray(data) ? data : []);
+      } catch (e) {
+        if (!cancelled) {
+          setPosts([]);
+          setError(e.message || "Could not load the feed.");
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
     };
     fetchFeed();
-  }, [token]);
+    return () => {
+      cancelled = true;
+    };
+  }, [token, retryKey]);
 
   useEffect(() => { if (newPost) setPosts(p => [newPost, ...p]); }, [newPost]);
 
   if (loading) return <div style={{ padding: 40, textAlign: "center", color: "#4a5568", fontFamily: "'DM Mono', monospace", fontSize: 13 }}>Loading feed...</div>;
+  if (error) return <LoadError title="Could not load feed" message={error} onRetry={() => setRetryKey(k => k + 1)} />;
   if (!posts.length) return (
     <div style={{ padding: 40, textAlign: "center", color: "#4a5568" }}>
       <p style={{ fontFamily: "'Sora', sans-serif", fontSize: 20, fontWeight: 700, color: "#e7edf3" }}>Nothing here yet</p>
@@ -649,6 +696,8 @@ function ProfilePage({ username, token, currentUser, onNavigate, onUpdateUser })
   const [isFollowing, setIsFollowing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [followLoading, setFollowLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [retryKey, setRetryKey] = useState(0);
   const [tab, setTab] = useState("posts");
   const [showEdit, setShowEdit] = useState(false);
   const isOwnProfile = currentUser?.username === username;
@@ -656,6 +705,7 @@ function ProfilePage({ username, token, currentUser, onNavigate, onUpdateUser })
   useEffect(() => {
     const load = async () => {
       setLoading(true); setTab("posts");
+      setError(null);
       try {
         const [prof, userPosts, followerList, followingList] = await Promise.all([
           apiFetch(`/users/${username}`, token),
@@ -666,11 +716,18 @@ function ProfilePage({ username, token, currentUser, onNavigate, onUpdateUser })
         setProfile(prof); setPosts(userPosts);
         setFollowers(followerList); setFollowing(followingList);
         if (token && currentUser) setIsFollowing(followerList.some(u => u.username === currentUser.username));
-      } catch {}
-      setLoading(false);
+      } catch (e) {
+        setProfile(null);
+        setPosts([]);
+        setFollowers([]);
+        setFollowing([]);
+        setError(e.message || "Could not load this profile.");
+      } finally {
+        setLoading(false);
+      }
     };
     load();
-  }, [username, token]);
+  }, [username, token, retryKey]);
 
   const handleFollow = async () => {
     if (!token || followLoading) return;
@@ -691,6 +748,7 @@ function ProfilePage({ username, token, currentUser, onNavigate, onUpdateUser })
   };
 
   if (loading) return <div style={{ padding: 40, textAlign: "center", color: "#4a5568", fontFamily: "'DM Mono', monospace" }}>Loading profile...</div>;
+  if (error) return <LoadError title="Could not load profile" message={error} onRetry={() => setRetryKey(k => k + 1)} />;
   if (!profile) return <div style={{ padding: 40, textAlign: "center", color: "#f87171" }}>User not found.</div>;
 
   const tabs = [
@@ -756,17 +814,53 @@ function MessagesPage({ token, currentUser, onNavigate }) {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState([]);
+  const [inboxError, setInboxError] = useState(null);
+  const [threadError, setThreadError] = useState(null);
+  const [sendError, setSendError] = useState(null);
+  const [retryKey, setRetryKey] = useState(0);
   const messagesEndRef = useRef(null);
 
   useEffect(() => {
     if (!token) { setLoading(false); return; }
-    apiFetch("/messages/inbox", token).then(setInbox).catch(() => {}).finally(() => setLoading(false));
-  }, [token]);
+    let cancelled = false;
+    setLoading(true);
+    setInboxError(null);
+    apiFetch("/messages/inbox", token)
+      .then(data => {
+        if (!cancelled) setInbox(data);
+      })
+      .catch(e => {
+        if (!cancelled) {
+          setInbox([]);
+          setInboxError(e.message || "Could not load your inbox.");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token, retryKey]);
 
   useEffect(() => {
     if (!activeThread || !token) return;
-    apiFetch(`/messages/${activeThread.id}`, token).then(setMessages).catch(() => {});
-  }, [activeThread, token]);
+    let cancelled = false;
+    setThreadError(null);
+    apiFetch(`/messages/${activeThread.id}`, token)
+      .then(data => {
+        if (!cancelled) setMessages(data);
+      })
+      .catch(e => {
+        if (!cancelled) {
+          setMessages([]);
+          setThreadError(e.message || "Could not load this conversation.");
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeThread, token, retryKey]);
 
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
@@ -783,16 +877,21 @@ function MessagesPage({ token, currentUser, onNavigate }) {
   const handleSend = async () => {
     if (!messageText.trim() || !activeThread || sending) return;
     setSending(true);
+    setSendError(null);
     try {
       const msg = await apiFetch(`/messages/${activeThread.id}`, token, { method: "POST", body: JSON.stringify({ text: messageText.trim() }) });
       setMessages(p => [...p, msg]);
       setMessageText("");
-    } catch {}
+    } catch (e) {
+      setSendError(e.message || "Could not send message.");
+    }
     setSending(false);
   };
 
   const openThread = (user) => {
     setActiveThread(user);
+    setThreadError(null);
+    setSendError(null);
     setSearchQuery(""); setSearchResults([]);
     const existing = inbox.find(t => t.user.id === user.id);
     if (!existing) setInbox(p => [{ user, lastMessage: null }, ...p]);
@@ -831,6 +930,7 @@ function MessagesPage({ token, currentUser, onNavigate }) {
         </div>
         <div style={{ flex: 1, overflowY: "auto" }}>
           {loading ? <div style={{ padding: 20, textAlign: "center", color: "#4a5568", fontSize: 13 }}>Loading...</div>
+            : inboxError ? <LoadError title="Could not load messages" message={inboxError} onRetry={() => setRetryKey(k => k + 1)} />
             : inbox.length === 0 ? <div style={{ padding: 20, textAlign: "center", color: "#4a5568", fontSize: 13 }}>No messages yet.</div>
             : inbox.map(thread => (
               <div key={thread.user.id} style={{ padding: "12px 20px", display: "flex", alignItems: "center", gap: 12, cursor: "pointer", background: activeThread?.id === thread.user.id ? "rgba(29,155,240,0.1)" : "transparent", transition: "background 0.15s", borderBottom: "1px solid #1e2733" }}
@@ -869,7 +969,9 @@ function MessagesPage({ token, currentUser, onNavigate }) {
               </div>
             </div>
             <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px", display: "flex", flexDirection: "column", gap: 8 }}>
-              {messages.map(msg => {
+              {threadError ? (
+                <LoadError title="Could not load conversation" message={threadError} onRetry={() => setRetryKey(k => k + 1)} />
+              ) : messages.map(msg => {
                 const isMe = msg.senderId === currentUser?.id;
                 return (
                   <div key={msg.id} style={{ display: "flex", justifyContent: isMe ? "flex-end" : "flex-start", gap: 8, alignItems: "flex-end" }}>
@@ -885,6 +987,7 @@ function MessagesPage({ token, currentUser, onNavigate }) {
               })}
               <div ref={messagesEndRef} />
             </div>
+            {sendError && <div style={{ padding: "8px 20px 0", color: "#f87171", fontSize: 13, fontFamily: "'DM Mono', monospace" }}>{sendError}</div>}
             <div style={{ padding: "12px 20px", borderTop: "1px solid #1e2733", display: "flex", gap: 10 }}>
               <input value={messageText} onChange={e => setMessageText(e.target.value)}
                 onKeyDown={e => e.key === "Enter" && handleSend()}
@@ -905,6 +1008,8 @@ function MessagesPage({ token, currentUser, onNavigate }) {
 function BookmarksPage({ token, onNavigate, currentUser }) {
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [retryKey, setRetryKey] = useState(0);
 
   useEffect(() => {
     if (!token) {
@@ -914,12 +1019,16 @@ function BookmarksPage({ token, onNavigate, currentUser }) {
     }
     let cancelled = false;
     setLoading(true);
+    setError(null);
     apiFetch("/bookmarks", token)
       .then(data => {
         if (!cancelled) setPosts(Array.isArray(data) ? data : []);
       })
-      .catch(() => {
-        if (!cancelled) setPosts([]);
+      .catch((e) => {
+        if (!cancelled) {
+          setPosts([]);
+          setError(e.message || "Could not load bookmarks.");
+        }
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -927,7 +1036,7 @@ function BookmarksPage({ token, onNavigate, currentUser }) {
     return () => {
       cancelled = true;
     };
-  }, [token]);
+  }, [token, retryKey]);
 
   const onBookmarkChange = (postId, bookmarked) => {
     if (!bookmarked) setPosts(p => p.filter(x => x.id !== postId));
@@ -944,6 +1053,9 @@ function BookmarksPage({ token, onNavigate, currentUser }) {
 
   if (loading) {
     return <div style={{ padding: 40, textAlign: "center", color: "#4a5568", fontFamily: "'DM Mono', monospace", fontSize: 13 }}>Loading bookmarks...</div>;
+  }
+  if (error) {
+    return <LoadError title="Could not load bookmarks" message={error} onRetry={() => setRetryKey(k => k + 1)} />;
   }
 
   if (!posts.length) {
@@ -968,16 +1080,32 @@ function SearchPage({ token, onNavigate }) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
-    if (!query.trim()) { setResults([]); return; }
+    if (!query.trim()) { setResults([]); setError(null); return; }
+    let cancelled = false;
     const t = setTimeout(async () => {
       setLoading(true);
-      try { const data = await apiFetch(`/users/search?q=${encodeURIComponent(query)}`, token); setResults(data); }
-      catch {} setLoading(false);
+      setError(null);
+      try {
+        const data = await apiFetch(`/users/search?q=${encodeURIComponent(query)}`, token);
+        if (!cancelled) setResults(data);
+      }
+      catch (e) {
+        if (!cancelled) {
+          setResults([]);
+          setError(e.message || "Search failed.");
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
     }, 300);
-    return () => clearTimeout(t);
-  }, [query]);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [query, token]);
 
   return (
     <div>
@@ -990,8 +1118,9 @@ function SearchPage({ token, onNavigate }) {
         </div>
       </div>
       {loading && <div style={{ padding: 20, textAlign: "center", color: "#4a5568", fontSize: 13 }}>Searching...</div>}
+      {error && <LoadError title="Search failed" message={error} />}
       {results.map(user => <UserListItem key={user.id} user={user} token={token} onNavigate={onNavigate} />)}
-      {!loading && query && results.length === 0 && <div style={{ padding: 40, textAlign: "center", color: "#4a5568" }}>No users found for "{query}"</div>}
+      {!loading && !error && query && results.length === 0 && <div style={{ padding: 40, textAlign: "center", color: "#4a5568" }}>No users found for "{query}"</div>}
     </div>
   );
 }
@@ -999,14 +1128,35 @@ function SearchPage({ token, onNavigate }) {
 function NotificationsPage({ token }) {
   const [notifs, setNotifs] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [retryKey, setRetryKey] = useState(0);
 
   useEffect(() => {
     if (!token) { setLoading(false); return; }
-    apiFetch("/notifications", token).then(setNotifs).catch(() => {}).finally(() => setLoading(false));
-  }, [token]);
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    apiFetch("/notifications", token)
+      .then(data => {
+        if (!cancelled) setNotifs(data);
+      })
+      .catch(e => {
+        if (!cancelled) {
+          setNotifs([]);
+          setError(e.message || "Could not load notifications.");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token, retryKey]);
 
   if (!token) return <div style={{ padding: 40, textAlign: "center", color: "#4a5568" }}>Sign in to see notifications.</div>;
   if (loading) return <div style={{ padding: 40, textAlign: "center", color: "#4a5568", fontSize: 13 }}>Loading...</div>;
+  if (error) return <LoadError title="Could not load notifications" message={error} onRetry={() => setRetryKey(k => k + 1)} />;
   if (!notifs.length) return (
     <div style={{ padding: 40, textAlign: "center", color: "#4a5568" }}>
       <p style={{ fontSize: 20, fontWeight: 700, color: "#e7edf3", fontFamily: "'Sora', sans-serif" }}>No notifications yet</p>
@@ -1155,16 +1305,22 @@ function RightSidebar({ token, onNavigate, currentUser }) {
   const [suggested, setSuggested] = useState([]);
   const [trending, setTrending] = useState([]);
   const [trendingLoading, setTrendingLoading] = useState(true);
+  const [suggestedError, setSuggestedError] = useState(null);
+  const [trendingError, setTrendingError] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
     setTrendingLoading(true);
+    setTrendingError(null);
     apiFetch("/posts/trending", null)
       .then(data => {
         if (!cancelled) setTrending(Array.isArray(data) ? data : []);
       })
-      .catch(() => {
-        if (!cancelled) setTrending([]);
+      .catch((e) => {
+        if (!cancelled) {
+          setTrending([]);
+          setTrendingError(e.message || "Could not load trending posts.");
+        }
       })
       .finally(() => {
         if (!cancelled) setTrendingLoading(false);
@@ -1175,10 +1331,26 @@ function RightSidebar({ token, onNavigate, currentUser }) {
   }, []);
 
   useEffect(() => {
-    if (!token || !currentUser) return;
+    if (!token || !currentUser) {
+      setSuggested([]);
+      setSuggestedError(null);
+      return;
+    }
+    let cancelled = false;
+    setSuggestedError(null);
     apiFetch("/users/search?q=a", token)
-      .then(users => setSuggested(users.filter(u => u.username !== currentUser.username).slice(0, 4)))
-      .catch(() => {});
+      .then(users => {
+        if (!cancelled) setSuggested(users.filter(u => u.username !== currentUser.username).slice(0, 4));
+      })
+      .catch((e) => {
+        if (!cancelled) {
+          setSuggested([]);
+          setSuggestedError(e.message || "Could not load suggestions.");
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [token, currentUser]);
 
   return (
@@ -1187,7 +1359,9 @@ function RightSidebar({ token, onNavigate, currentUser }) {
         <div style={{ padding: "16px 20px", borderBottom: "1px solid #1e2733" }}>
           <h2 style={{ margin: 0, color: "#e7edf3", fontSize: 18, fontWeight: 800, fontFamily: "'Sora', sans-serif" }}>Who to follow</h2>
         </div>
-        {suggested.length === 0
+        {suggestedError
+          ? <div style={{ padding: "16px 20px", color: "#f87171", fontSize: 13, fontFamily: "'DM Mono', monospace" }}>{suggestedError}</div>
+          : suggested.length === 0
           ? <div style={{ padding: "16px 20px", color: "#4a5568", fontSize: 13, fontFamily: "'DM Mono', monospace" }}>{token ? "No suggestions yet." : "Sign in to see suggestions."}</div>
           : suggested.map(u => (
             <div key={u.id} style={{ padding: "12px 20px", borderBottom: "1px solid #1e2733", display: "flex", alignItems: "center", gap: 10, cursor: "pointer", transition: "background 0.15s" }}
@@ -1211,6 +1385,8 @@ function RightSidebar({ token, onNavigate, currentUser }) {
         <div style={{ padding: "8px 0" }}>
           {trendingLoading ? (
             <div style={{ padding: "16px 20px", color: "#4a5568", fontSize: 13, fontFamily: "'DM Mono', monospace" }}>Loading…</div>
+          ) : trendingError ? (
+            <div style={{ padding: "16px 20px", color: "#f87171", fontSize: 13, fontFamily: "'DM Mono', monospace" }}>{trendingError}</div>
           ) : trending.length === 0 ? (
             <div style={{ padding: "16px 20px", color: "#4a5568", fontSize: 13, fontFamily: "'DM Mono', monospace" }}>No trending posts yet.</div>
           ) : (
