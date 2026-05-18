@@ -2,6 +2,7 @@
 :root {
   --safe-top: env(safe-area-inset-top);
   --safe-bottom: env(safe-area-inset-bottom);
+  --vh: 1vh; /* Mobile viewport height fix */
 }
 
 * {
@@ -9,6 +10,9 @@
   -webkit-tap-highlight-color: transparent; /* Removes the gray flash when clicking buttons */
   -webkit-touch-callout: none; /* Prevents "Save Image" popups on long-press */
   user-select: none; /* Prevents text highlighting across the app */
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
 }
 
 html, body {
@@ -16,10 +20,13 @@ html, body {
   padding: 0;
   width: 100vw;
   height: 100vh;
+  height: calc(var(--vh, 1vh) * 100); /* Mobile viewport height fix */
   overflow: hidden; /* Stops the whole page from bouncing/scrolling */
   background-color: #000;
   color: #0f0; /* Terminal Green */
   font-family: 'Courier New', Courier, monospace;
+  font-size: 16px; /* Prevents zoom on iOS when focusing inputs */
+  -webkit-text-size-adjust: 100%; /* Prevents text scaling on orientation change */
 }
 
 /* --- THE MAIN VIEWPORT --- */
@@ -28,6 +35,7 @@ html, body {
   flex-direction: column;
   width: 100%;
   height: 100%;
+  height: calc(var(--vh, 1vh) * 100); /* Mobile viewport height fix */
   padding-top: var(--safe-top); /* Handles the iPhone Notch */
   padding-bottom: var(--safe-bottom); /* Handles the Home Indicator */
 }
@@ -37,6 +45,7 @@ textarea, input {
   user-select: text !important;
   -webkit-user-select: text !important;
   outline: none;
+  font-size: 16px; /* Prevents zoom on iOS */
 }
 
 /* --- SCROLLABLE CONTENT AREA --- */
@@ -44,4 +53,120 @@ textarea, input {
   flex: 1;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch; /* High-speed native scrolling feel */
+  overscroll-behavior: contain; /* Prevents pull-to-refresh on mobile */
+}
+
+/* --- MOBILE OPTIMIZATIONS --- */
+@media (max-width: 768px) {
+  /* Smaller font sizes for mobile */
+  body {
+    font-size: 14px;
+  }
+
+  /* Touch-friendly button sizes */
+  button {
+    min-height: 44px; /* iOS Human Interface Guidelines minimum */
+    min-width: 44px;
+  }
+
+  /* Better spacing for mobile */
+  .scroll-container {
+    padding: 8px;
+  }
+
+  /* Hide scrollbars on mobile */
+  .scroll-container::-webkit-scrollbar {
+    display: none;
+  }
+
+  .scroll-container {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
+
+/* --- LOADING STATES --- */
+.loading {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.loading::after {
+  content: "⟳";
+  animation: spin 1s linear infinite;
+  margin-left: 8px;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* --- OFFLINE INDICATOR --- */
+.offline-indicator {
+  position: fixed;
+  top: var(--safe-top, 0px);
+  left: 0;
+  right: 0;
+  background: #f00;
+  color: #000;
+  text-align: center;
+  padding: 4px;
+  font-size: 12px;
+  font-weight: bold;
+  z-index: 1000;
+  animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+  from { transform: translateY(-100%); }
+  to { transform: translateY(0); }
+}
+
+/* --- PWA INSTALL PROMPT --- */
+.install-prompt {
+  position: fixed;
+  bottom: var(--safe-bottom, 0px);
+  left: 0;
+  right: 0;
+  background: #222;
+  border-top: 1px solid #444;
+  padding: 12px;
+  z-index: 1000;
+  animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+.install-prompt button {
+  margin: 0 8px;
+}
+
+/* --- TOUCH FEEDBACK --- */
+.touch-feedback {
+  transition: background-color 0.1s ease;
+}
+
+.touch-feedback:active {
+  background-color: rgba(0, 255, 0, 0.1) !important;
+}
+
+/* --- IMPROVED FOCUS STYLES FOR ACCESSIBILITY --- */
+button:focus,
+input:focus,
+textarea:focus {
+  outline: 2px solid #0f0;
+  outline-offset: 2px;
+}
+
+/* --- REDUCE MOTION FOR ACCESSIBILITY --- */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
