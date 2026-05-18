@@ -38,6 +38,7 @@ export class AuthController {
       displayName: user.displayName,
       avatarUrl: user.avatarUrl,
     }));
-    res.redirect(`http://localhost/?token=${token}&user=${userData}`);
+    const frontendUrl = process.env.FRONTEND_URL ?? process.env.ALLOWED_ORIGIN ?? 'http://localhost:8080';
+    res.redirect(`${frontendUrl}/?token=${token}&user=${userData}`);
   }
 }
