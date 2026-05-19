@@ -2,14 +2,14 @@ services:
   db:
     image: postgres:15-alpine
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-gary_admin}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-[REDACTED]}
-      POSTGRES_DB: ${POSTGRES_DB:-labeouf_vault}
-      TZ: ${TZ:-America/New_York}
+      POSTGRES_USER: gary_admin
+      POSTGRES_PASSWORD: [REDACTED]
+      POSTGRES_DB: labeouf_vault
+      TZ: America/New_York
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-gary_admin} -d ${POSTGRES_DB:-labeouf_vault}"]
+      test: ["CMD-SHELL", "pg_isready -U gary_admin -d labeouf_vault"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -17,46 +17,33 @@ services:
   backend:
     build: ./backend
     ports:
-      - "${BACKEND_HOST_PORT:-3001}:3001"
+      - "3001:3001"
     depends_on:
       db:
         condition: service_healthy
     environment:
       DATABASE_HOST: db
       DATABASE_PORT: 5432
-      DATABASE_USER: ${POSTGRES_USER:-gary_admin}
-      DATABASE_PASSWORD: ${POSTGRES_PASSWORD:-[REDACTED]}
-      DATABASE_NAME: ${POSTGRES_DB:-labeouf_vault}
-      TZ: ${TZ:-America/New_York}
-      WEBHOOK_URL: ${WEBHOOK_URL:-}
-      ALLOWED_ORIGIN: ${ALLOWED_ORIGIN:-http://localhost:8080}
-      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:8080}
-      JWT_SECRET: ${JWT_SECRET:-[REDACTED]}
-      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
-      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
-      GOOGLE_CALLBACK_URL: ${GOOGLE_CALLBACK_URL:-http://localhost:3001/auth/google/callback}
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      GOOGLE_VISION_API_KEY: ${GOOGLE_VISION_API_KEY:-}
-      UPLOAD_PATH: /app/uploads
-      TYPEORM_SYNCHRONIZE: ${TYPEORM_SYNCHRONIZE:-true}
-      TYPEORM_MIGRATIONS_RUN: ${TYPEORM_MIGRATIONS_RUN:-false}
-    volumes:
-      - uploads_data:/app/uploads
-    healthcheck:
-      test: ["CMD-SHELL", "node -e \"fetch('http://localhost:3001/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 20s
+      DATABASE_USER: gary_admin
+      DATABASE_PASSWORD: [REDACTED]
+      DATABASE_NAME: labeouf_vault
+      TZ: America/New_York
+      WEBHOOK_URL: ""
+      ALLOWED_ORIGIN: http://localhost
+      JWT_SECRET: [REDACTED]
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      GOOGLE_CALLBACK_URL: http://localhost:3001/auth/google/callback
+      OPENAI_API_KEY: ""
+      TYPEORM_SYNCHRONIZE: "true"
+      TYPEORM_MIGRATIONS_RUN: "false"
 
   frontend:
     build: ./frontend
     ports:
-      - "${FRONTEND_HOST_PORT:-8080}:80"
+      - "80:80"
     depends_on:
-      backend:
-        condition: service_healthy
+      - backend
 
 volumes:
   postgres_data:
-  uploads_data:
