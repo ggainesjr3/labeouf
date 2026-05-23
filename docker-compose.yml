@@ -1,6 +1,9 @@
 services:
   db:
     image: postgres:15-alpine
+    # Must bind 0.0.0.0 (not 127.0.0.1) if backend uses db — that resolves to docker0, not loopback.
+    ports:
+      - "127.0.0.1:5432:5432"
     environment:
       POSTGRES_USER: gary_admin
       POSTGRES_PASSWORD: [REDACTED]
@@ -18,10 +21,13 @@ services:
     build: ./backend
     ports:
       - "3001:3001"
+    extra_hosts:
+      - "db:host-gateway"
     depends_on:
       db:
         condition: service_healthy
     environment:
+      # Use host loopback when container-to-container bridge traffic is blocked (iptables/Tailscale).
       DATABASE_HOST: db
       DATABASE_PORT: 5432
       DATABASE_USER: gary_admin
@@ -35,6 +41,8 @@ services:
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
       GOOGLE_CALLBACK_URL: http://localhost:3001/auth/google/callback
       OPENAI_API_KEY: ""
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY}
       TYPEORM_SYNCHRONIZE: "true"
       TYPEORM_MIGRATIONS_RUN: "false"
 
