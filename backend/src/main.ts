@@ -14,7 +14,7 @@ async function bootstrap() {
   app.useStaticAssets(uploadRoot, { prefix: '/uploads/' });
 
   app.enableCors({
-    origin: process.env.ALLOWED_ORIGIN ?? 'http://localhost:3000',
+    origin: process.env.ALLOWED_ORIGIN ? process.env.ALLOWED_ORIGIN.split(',') : ['http://localhost:3000', 'http://localhost:8080'],
     methods: 'GET,POST,PATCH,DELETE,OPTIONS',
     credentials: true,
   });
