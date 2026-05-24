@@ -14,6 +14,7 @@ import { Bookmark } from './bookmark.entity';
 import { Report } from './report.entity';
 import { ModerationLog } from './moderation-log.entity';
 import { PushSubscription } from './push-subscription.entity';
+import { PasswordResetToken } from './password-reset-token.entity';
 
 export const entities = [
   Audit,
@@ -28,6 +29,7 @@ export const entities = [
   Report,
   ModerationLog,
   PushSubscription,
+  PasswordResetToken,
 ];
 
 export const databaseConfig = {
