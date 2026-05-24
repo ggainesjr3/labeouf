@@ -92,6 +92,46 @@ export class PushService {
     });
   }
 
+  async sendTestToAll() {
+    if (!process.env.VAPID_PUBLIC_KEY || !process.env.VAPID_PRIVATE_KEY) {
+      throw new BadRequestException('VAPID keys are not configured');
+    }
+
+    const subscriptions = await this.subscriptionRepository.find();
+    let sent = 0;
+    let failed = 0;
+
+    for (const subscription of subscriptions) {
+      try {
+        await webpush.sendNotification(
+          {
+            endpoint: subscription.endpoint,
+            expirationTime: subscription.expirationTime ? Number(subscription.expirationTime) : null,
+            keys: {
+              p256dh: subscription.p256dh,
+              auth: subscription.auth,
+            },
+          },
+          JSON.stringify({
+            title: 'LaBeouf test',
+            body: 'Push notifications are working.',
+            data: { type: 'test' },
+          }),
+        );
+        sent += 1;
+      } catch (err) {
+        const statusCode = (err as { statusCode?: number }).statusCode;
+        if (statusCode === 404 || statusCode === 410) {
+          await this.subscriptionRepository.delete({ id: subscription.id });
+        }
+        failed += 1;
+        this.logger.warn(`Test push failed: ${(err as Error).message}`);
+      }
+    }
+
+    return { ok: true, subscribers: subscriptions.length, sent, failed };
+  }
+
   private async send(
     subscription: PushSubscription,
     payload: { title: string; body: string; data?: Record<string, unknown> },

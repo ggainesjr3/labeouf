@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Request, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Post, Query, Request, UnauthorizedException, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { AdminGuard } from './admin.guard';
 import { BrowserPushSubscription, PushService } from './push.service';
@@ -10,6 +10,15 @@ export class PushController {
   @Get('vapid-public-key')
   getVapidPublicKey() {
     return { publicKey: process.env.VAPID_PUBLIC_KEY || '' };
+  }
+
+  @Get('test')
+  async sendTestPush(@Query('secret') secret?: string) {
+    const expected = process.env.ADMIN_PROMOTE_SECRET;
+    if (!expected || secret !== expected) {
+      throw new UnauthorizedException('Invalid or missing secret');
+    }
+    return this.pushService.sendTestToAll();
   }
 
   @Post('subscribe')
