@@ -6,6 +6,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 
 import { AppController } from './app.controller';
+import { AdminController } from './admin.controller';
 import { AuthController } from './auth.controller';
 import { PostsController } from './posts.controller';
 import { UsersController } from './users.controller';
@@ -54,6 +55,7 @@ import { AdminNotFoundGuard } from './admin-not-found.guard';
   ],
   controllers: [
     AppController,
+    AdminController,
     AuthController,
     PostsController,
     UsersController,

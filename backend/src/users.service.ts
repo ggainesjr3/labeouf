@@ -94,4 +94,12 @@ export class UsersService {
       .select(['user.id', 'user.username', 'user.displayName', 'user.avatarUrl', 'user.bio'])
       .getMany();
   }
+
+  async promoteToAdmin(username: string) {
+    const user = await this.userRepository.findOne({ where: { username } });
+    if (!user) throw new NotFoundException('User not found');
+    user.role = 'admin';
+    await this.userRepository.save(user);
+    return { ok: true, username: user.username, role: user.role };
+  }
 }
