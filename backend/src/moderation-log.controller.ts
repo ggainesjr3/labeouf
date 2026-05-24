@@ -36,9 +36,9 @@ export class ModerationLogController {
     @Query('startDate') startDateStr?: string,
     @Query('endDate') endDateStr?: string,
   ) {
-    const parsedLimit = limitStr != null ? parseInt(limitStr, 10) : 50;
+    const parsedLimit = limitStr != null ? parseInt(limitStr, 10) : 20;
     const parsedOffset = offsetStr != null ? parseInt(offsetStr, 10) : 0;
-    const limit = Number.isFinite(parsedLimit) ? parsedLimit : 50;
+    const limit = Number.isFinite(parsedLimit) ? parsedLimit : 20;
     const offset = Number.isFinite(parsedOffset) ? parsedOffset : 0;
 
     const validDecisions: ModerationDecision[] = ['approved', 'rejected'];

@@ -16,6 +16,27 @@ import {
 } from "recharts";
 
 const CHART_COLORS = ["#1d9bf0", "#6366f1", "#ec4899", "#4ade80", "#f59e0b", "#eab308", "#94a3b8"];
+const PAGE_SIZE = 20;
+
+function TabSpinner({ label = "Loading…" }) {
+  return (
+    <div style={{ padding: 48, textAlign: "center", color: "#94a3b8", fontFamily: "'DM Mono', monospace" }}>
+      <div
+        style={{
+          width: 32,
+          height: 32,
+          margin: "0 auto 12px",
+          border: "3px solid #1e2733",
+          borderTopColor: "#1d9bf0",
+          borderRadius: "50%",
+          animation: "admin-spin 0.8s linear infinite",
+        }}
+      />
+      {label}
+      <style>{`@keyframes admin-spin { to { transform: rotate(360deg); } }`}</style>
+    </div>
+  );
+}
 
 function useAdminAxios(token) {
   return useMemo(() => {
@@ -247,56 +268,69 @@ export default function AdminDashboard({ token, user, onNavigate, onUserRefresh 
           {tab === "reports" && (
             <ReportsTab
               client={client}
+              isActive
               onNavigate={onNavigate}
               showToast={showToast}
               touchRefresh={touchRefresh}
             />
           )}
-          {tab === "logs" && <ModerationLogsTab client={client} showToast={showToast} touchRefresh={touchRefresh} />}
-          {tab === "stats" && <StatsTab client={client} showToast={showToast} touchRefresh={touchRefresh} />}
+          {tab === "logs" && (
+            <ModerationLogsTab client={client} isActive showToast={showToast} touchRefresh={touchRefresh} />
+          )}
+          {tab === "stats" && (
+            <StatsTab client={client} isActive showToast={showToast} touchRefresh={touchRefresh} />
+          )}
         </div>
       </div>
     </div>
   );
 }
 
-function ReportsTab({ client, onNavigate, showToast, touchRefresh }) {
-  const [loading, setLoading] = useState(true);
+function ReportsTab({ client, isActive, onNavigate, showToast, touchRefresh }) {
+  const [initialLoading, setInitialLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [items, setItems] = useState([]);
   const [total, setTotal] = useState(0);
   const [statusFilter, setStatusFilter] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
-  const [page, setPage] = useState(0);
-  const pageSize = 20;
 
-  const fetchReports = useCallback(async () => {
-    setLoading(true);
+  const filterKey = `${statusFilter}|${startDate}|${endDate}`;
+
+  const fetchReports = useCallback(async (offset, append) => {
+    if (!isActive) return;
+    if (append) setLoadingMore(true);
+    else setInitialLoading(true);
     touchRefresh();
     try {
-      const params = { limit: pageSize, offset: page * pageSize };
+      const params = { limit: PAGE_SIZE, offset };
       if (statusFilter) params.status = statusFilter;
       if (startDate) params.startDate = new Date(startDate).toISOString();
       if (endDate) params.endDate = new Date(endDate + "T23:59:59.999Z").toISOString();
       const { data } = await client.get("/admin/reports", { params });
-      setItems(data.items || []);
-      setTotal(data.total ?? (data.items || []).length);
+      const nextItems = data.items || [];
+      setItems((prev) => (append ? [...prev, ...nextItems] : nextItems));
+      setTotal(data.total ?? nextItems.length);
     } catch (e) {
       showToast(e.response?.data?.message || e.message || "Failed to load reports", true);
+      if (!append) setItems([]);
     } finally {
-      setLoading(false);
+      setInitialLoading(false);
+      setLoadingMore(false);
     }
-  }, [client, statusFilter, startDate, endDate, page, showToast, touchRefresh]);
+  }, [client, statusFilter, startDate, endDate, isActive, showToast, touchRefresh]);
 
   useEffect(() => {
-    fetchReports();
-  }, [fetchReports]);
+    if (!isActive) return;
+    fetchReports(0, false);
+  }, [isActive, filterKey, fetchReports]);
 
   useEffect(() => {
-    const h = () => fetchReports();
+    if (!isActive) return;
+    const h = () => fetchReports(0, false);
     window.addEventListener("admin-dashboard-refresh", h);
     return () => window.removeEventListener("admin-dashboard-refresh", h);
-  }, [fetchReports]);
+  }, [isActive, fetchReports]);
 
   const statusBadge = (s) => {
     if (s === "pending") return badgeStyle("#f59e0b", "rgba(245,158,11,0.12)");
@@ -308,13 +342,13 @@ function ReportsTab({ client, onNavigate, showToast, touchRefresh }) {
     try {
       await client.patch(`/admin/reports/${id}`, { status });
       showToast(`Report #${id} ${status}`);
-      fetchReports();
+      fetchReports(0, false);
     } catch (e) {
       showToast(e.response?.data?.message || e.message, true);
     }
   };
 
-  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const hasMore = items.length < total;
 
   return (
     <div>
@@ -325,7 +359,7 @@ function ReportsTab({ client, onNavigate, showToast, touchRefresh }) {
       <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 16, alignItems: "center" }}>
         <select
           value={statusFilter}
-          onChange={(e) => { setPage(0); setStatusFilter(e.target.value); }}
+          onChange={(e) => setStatusFilter(e.target.value)}
           style={filterInputStyle}
         >
           <option value="">All statuses</option>
@@ -333,13 +367,13 @@ function ReportsTab({ client, onNavigate, showToast, touchRefresh }) {
           <option value="approved">approved</option>
           <option value="rejected">rejected</option>
         </select>
-        <input type="date" value={startDate} onChange={(e) => { setPage(0); setStartDate(e.target.value); }} style={filterInputStyle} />
+        <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} style={filterInputStyle} />
         <span style={{ color: "#4a5568" }}>→</span>
-        <input type="date" value={endDate} onChange={(e) => { setPage(0); setEndDate(e.target.value); }} style={filterInputStyle} />
+        <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} style={filterInputStyle} />
       </div>
 
-      {loading ? (
-        <Loading />
+      {initialLoading ? (
+        <TabSpinner label="Loading reports…" />
       ) : items.length === 0 ? (
         <Empty />
       ) : (
@@ -391,58 +425,74 @@ function ReportsTab({ client, onNavigate, showToast, touchRefresh }) {
       )}
 
       {items.length > 0 && (
-        <div style={{ display: "flex", justifyContent: "space-between", marginTop: 16, alignItems: "center", color: "#4a5568", fontSize: 13 }}>
-          <span>Page {page + 1} / {totalPages} · {total} reports</span>
-          <div style={{ display: "flex", gap: 8 }}>
-            <button type="button" disabled={page === 0} onClick={() => setPage((p) => Math.max(p - 1, 0))} style={btnMuted}>Prev</button>
-            <button type="button" disabled={(page + 1) * pageSize >= total} onClick={() => setPage((p) => p + 1)} style={btnMuted}>Next</button>
+        <div style={{ marginTop: 16, textAlign: "center" }}>
+          <div style={{ color: "#4a5568", fontSize: 13, marginBottom: 10, fontFamily: "'DM Mono', monospace" }}>
+            Showing {items.length} of {total} reports
           </div>
+          {hasMore && (
+            <button
+              type="button"
+              disabled={loadingMore}
+              onClick={() => fetchReports(items.length, true)}
+              style={btnMuted}
+            >
+              {loadingMore ? "Loading…" : "Load more"}
+            </button>
+          )}
         </div>
       )}
     </div>
   );
 }
 
-function ModerationLogsTab({ client, showToast, touchRefresh }) {
-  const [loading, setLoading] = useState(true);
+function ModerationLogsTab({ client, isActive, showToast, touchRefresh }) {
+  const [initialLoading, setInitialLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [items, setItems] = useState([]);
   const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(0);
   const [decision, setDecision] = useState("");
   const [method, setMethod] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [expanded, setExpanded] = useState(null);
-  const limit = 50;
 
-  const fetchLogs = useCallback(async () => {
-    setLoading(true);
+  const filterKey = `${decision}|${method}|${startDate}|${endDate}`;
+
+  const fetchLogs = useCallback(async (offset, append) => {
+    if (!isActive) return;
+    if (append) setLoadingMore(true);
+    else setInitialLoading(true);
     touchRefresh();
     try {
-      const params = { limit, offset: page * limit };
+      const params = { limit: PAGE_SIZE, offset };
       if (decision) params.decision = decision;
       if (method) params.method = method;
       if (startDate) params.startDate = new Date(startDate).toISOString();
       if (endDate) params.endDate = new Date(endDate + "T23:59:59.999Z").toISOString();
       const { data } = await client.get("/admin/moderation-logs", { params });
-      setItems(data.items || []);
-      setTotal(data.total ?? 0);
+      const nextItems = data.items || [];
+      setItems((prev) => (append ? [...prev, ...nextItems] : nextItems));
+      setTotal(data.total ?? nextItems.length);
     } catch (e) {
       showToast(e.response?.data?.message || e.message, true);
+      if (!append) setItems([]);
     } finally {
-      setLoading(false);
+      setInitialLoading(false);
+      setLoadingMore(false);
     }
-  }, [client, page, decision, method, startDate, endDate, showToast, touchRefresh]);
+  }, [client, decision, method, startDate, endDate, isActive, showToast, touchRefresh]);
 
   useEffect(() => {
-    fetchLogs();
-  }, [fetchLogs]);
+    if (!isActive) return;
+    fetchLogs(0, false);
+  }, [isActive, filterKey, fetchLogs]);
 
   useEffect(() => {
-    const h = () => fetchLogs();
+    if (!isActive) return;
+    const h = () => fetchLogs(0, false);
     window.addEventListener("admin-dashboard-refresh", h);
     return () => window.removeEventListener("admin-dashboard-refresh", h);
-  }, [fetchLogs]);
+  }, [isActive, fetchLogs]);
 
   const exportCsv = () => {
     const rows = [
@@ -475,23 +525,23 @@ function ModerationLogsTab({ client, showToast, touchRefresh }) {
         </button>
       </div>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 16 }}>
-        <select value={decision} onChange={(e) => { setPage(0); setDecision(e.target.value); }} style={filterInputStyle}>
+        <select value={decision} onChange={(e) => setDecision(e.target.value)} style={filterInputStyle}>
           <option value="">All decisions</option>
           <option value="approved">approved</option>
           <option value="rejected">rejected</option>
         </select>
-        <select value={method} onChange={(e) => { setPage(0); setMethod(e.target.value); }} style={filterInputStyle}>
+        <select value={method} onChange={(e) => setMethod(e.target.value)} style={filterInputStyle}>
           <option value="">All methods</option>
           <option value="google_vision">google_vision</option>
           <option value="openai_moderation">openai_moderation</option>
           <option value="banned_terms_fallback">banned_terms_fallback</option>
         </select>
-        <input type="date" value={startDate} onChange={(e) => { setPage(0); setStartDate(e.target.value); }} style={filterInputStyle} />
-        <input type="date" value={endDate} onChange={(e) => { setPage(0); setEndDate(e.target.value); }} style={filterInputStyle} />
+        <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} style={filterInputStyle} />
+        <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} style={filterInputStyle} />
       </div>
 
-      {loading ? (
-        <Loading />
+      {initialLoading ? (
+        <TabSpinner label="Loading moderation logs…" />
       ) : items.length === 0 ? (
         <Empty />
       ) : (
@@ -541,61 +591,82 @@ function ModerationLogsTab({ client, showToast, touchRefresh }) {
       )}
 
       {items.length > 0 && (
-        <div style={{ display: "flex", justifyContent: "space-between", marginTop: 16, color: "#4a5568", fontSize: 13 }}>
-          <span>
-            Showing {items.length} of {total}
-          </span>
-          <div style={{ display: "flex", gap: 8 }}>
-            <button type="button" disabled={page === 0} onClick={() => setPage((p) => p - 1)} style={btnMuted}>
-              Prev
-            </button>
-            <button type="button" disabled={(page + 1) * limit >= total} onClick={() => setPage((p) => p + 1)} style={btnMuted}>
-              Next
-            </button>
+        <div style={{ marginTop: 16, textAlign: "center" }}>
+          <div style={{ color: "#4a5568", fontSize: 13, marginBottom: 10, fontFamily: "'DM Mono', monospace" }}>
+            Showing {items.length} of {total} logs
           </div>
+          {items.length < total && (
+            <button
+              type="button"
+              disabled={loadingMore}
+              onClick={() => fetchLogs(items.length, true)}
+              style={btnMuted}
+            >
+              {loadingMore ? "Loading…" : "Load more"}
+            </button>
+          )}
         </div>
       )}
     </div>
   );
 }
 
-function StatsTab({ client, showToast, touchRefresh }) {
-  const [loading, setLoading] = useState(true);
+function StatsTab({ client, isActive, showToast, touchRefresh }) {
+  const [summaryLoading, setSummaryLoading] = useState(false);
+  const [chartsLoading, setChartsLoading] = useState(false);
   const [reportStats, setReportStats] = useState(null);
   const [modStats, setModStats] = useState(null);
   const [trends, setTrends] = useState([]);
   const [charts, setCharts] = useState(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const loadSummary = useCallback(async () => {
+    if (!isActive) return;
+    setSummaryLoading(true);
     touchRefresh();
     try {
-      const [rs, ms, tr, ch] = await Promise.all([
+      const [rs, ms] = await Promise.all([
         client.get("/admin/reports/stats"),
         client.get("/admin/moderation-logs/stats"),
-        client.get("/admin/reports/trends", { params: { days: 30 } }),
-        client.get("/admin/moderation-logs/charts"),
       ]);
       setReportStats(rs.data);
       setModStats(ms.data);
+    } catch (e) {
+      showToast(e.response?.data?.message || e.message, true);
+    } finally {
+      setSummaryLoading(false);
+    }
+  }, [client, isActive, showToast, touchRefresh]);
+
+  const loadCharts = useCallback(async () => {
+    if (!isActive) return;
+    setChartsLoading(true);
+    try {
+      const [tr, ch] = await Promise.all([
+        client.get("/admin/reports/trends", { params: { days: 30 } }),
+        client.get("/admin/moderation-logs/charts"),
+      ]);
       setTrends(tr.data || []);
       setCharts(ch.data);
     } catch (e) {
       showToast(e.response?.data?.message || e.message, true);
     } finally {
-      setLoading(false);
+      setChartsLoading(false);
     }
-  }, [client, showToast, touchRefresh]);
+  }, [client, isActive, showToast]);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    if (!isActive) return;
+    loadSummary().then(() => loadCharts());
+  }, [isActive, loadSummary, loadCharts]);
 
   useEffect(() => {
-    const h = () => load();
+    if (!isActive) return;
+    const h = () => {
+      loadSummary().then(() => loadCharts());
+    };
     window.addEventListener("admin-dashboard-refresh", h);
     return () => window.removeEventListener("admin-dashboard-refresh", h);
-  }, [load]);
+  }, [isActive, loadSummary, loadCharts]);
 
   const lineData = useMemo(() => {
     const end = new Date();
@@ -613,7 +684,7 @@ function StatsTab({ client, showToast, touchRefresh }) {
     ? Object.entries(modStats.byMethod).map(([name, value]) => ({ name, value }))
     : [];
 
-  if (loading) return <Loading />;
+  if (summaryLoading && !reportStats) return <TabSpinner label="Loading stats…" />;
 
   return (
     <div>
@@ -626,6 +697,10 @@ function StatsTab({ client, showToast, touchRefresh }) {
         <StatCard label="Moderation logs" value={modStats?.total ?? 0} color="#1d9bf0" />
       </div>
 
+      {chartsLoading && !charts ? (
+        <TabSpinner label="Loading charts…" />
+      ) : (
+        <>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 20 }}>
         <div style={chartBox}>
           <h3 style={chartTitle}>Reports (30 days)</h3>
@@ -702,6 +777,8 @@ function StatsTab({ client, showToast, touchRefresh }) {
           <div style={{ color: "#4a5568", padding: 16 }}>No moderation data yet.</div>
         )}
       </div>
+        </>
+      )}
     </div>
   );
 }

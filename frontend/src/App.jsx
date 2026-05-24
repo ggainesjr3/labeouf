@@ -1658,8 +1658,13 @@ export function AdminPage({ token, user }) {
   const [logs, setLogs] = useState([]);
   const [reportStats, setReportStats] = useState(null);
   const [logStats, setLogStats] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [reportsLoading, setReportsLoading] = useState(false);
+  const [logsLoading, setLogsLoading] = useState(false);
+  const [statsLoading, setStatsLoading] = useState(false);
+  const [reportsTotal, setReportsTotal] = useState(0);
+  const [logsTotal, setLogsTotal] = useState(0);
   const [error, setError] = useState(null);
+  const ADMIN_PAGE_SIZE = 20;
 
   const tableStyle = { width: "100%", borderCollapse: "collapse", fontSize: 13 };
   const thStyle = { textAlign: "left", color: "#64748b", fontFamily: "'DM Mono', monospace", fontSize: 11, fontWeight: 600, padding: "10px 12px", borderBottom: "1px solid #1e2733", textTransform: "uppercase", letterSpacing: "0.05em" };
@@ -1670,32 +1675,36 @@ export function AdminPage({ token, user }) {
   const displayDate = (value) => value ? new Date(value).toLocaleString() : "—";
   const authorName = (row) => row.author?.displayName || row.author?.username || row.authorName || row.authorUsername || row.authorId || "—";
 
-  const fetchReports = useCallback(async () => {
-    setLoading(true); setError(null);
+  const fetchReports = useCallback(async (offset = 0, append = false) => {
+    setReportsLoading(true); setError(null);
     try {
-      const data = await apiFetch("/admin/reports", token);
-      setReports(rowsFrom(data));
+      const data = await apiFetch(`/admin/reports?limit=${ADMIN_PAGE_SIZE}&offset=${offset}`, token);
+      const items = rowsFrom(data);
+      setReports((prev) => (append ? [...prev, ...items] : items));
+      setReportsTotal(data.total ?? items.length);
     } catch (e) {
       setError(e.message || "Failed to load reports.");
-      setReports([]);
+      if (!append) setReports([]);
     }
-    setLoading(false);
+    setReportsLoading(false);
   }, [token]);
 
-  const fetchLogs = useCallback(async () => {
-    setLoading(true); setError(null);
+  const fetchLogs = useCallback(async (offset = 0, append = false) => {
+    setLogsLoading(true); setError(null);
     try {
-      const data = await apiFetch("/admin/moderation-logs", token);
-      setLogs(rowsFrom(data));
+      const data = await apiFetch(`/admin/moderation-logs?limit=${ADMIN_PAGE_SIZE}&offset=${offset}`, token);
+      const items = rowsFrom(data);
+      setLogs((prev) => (append ? [...prev, ...items] : items));
+      setLogsTotal(data.total ?? items.length);
     } catch (e) {
       setError(e.message || "Failed to load moderation logs.");
-      setLogs([]);
+      if (!append) setLogs([]);
     }
-    setLoading(false);
+    setLogsLoading(false);
   }, [token]);
 
   const fetchStats = useCallback(async () => {
-    setLoading(true); setError(null);
+    setStatsLoading(true); setError(null);
     try {
       const [reportsData, logsData] = await Promise.all([
         apiFetch("/admin/reports/stats", token),
@@ -1708,13 +1717,13 @@ export function AdminPage({ token, user }) {
       setReportStats(null);
       setLogStats(null);
     }
-    setLoading(false);
+    setStatsLoading(false);
   }, [token]);
 
   useEffect(() => {
     if (!token || user?.role !== "admin") return;
-    if (tab === "reports") fetchReports();
-    if (tab === "logs") fetchLogs();
+    if (tab === "reports") fetchReports(0, false);
+    if (tab === "logs") fetchLogs(0, false);
     if (tab === "stats") fetchStats();
   }, [token, user?.role, tab, fetchReports, fetchLogs, fetchStats]);
 
@@ -1767,9 +1776,12 @@ export function AdminPage({ token, user }) {
       </div>
 
       {error && <div style={{ marginBottom: 12, color: "#f87171", fontSize: 13, fontFamily: "'DM Mono', monospace" }}>{error}</div>}
-      {loading && <div style={{ padding: 24, textAlign: "center", color: "#4a5568", fontFamily: "'DM Mono', monospace", fontSize: 13 }}>Loading...</div>}
 
-      {!loading && tab === "reports" && (
+      {tab === "reports" && reportsLoading && reports.length === 0 && (
+        <div style={{ padding: 24, textAlign: "center", color: "#4a5568", fontFamily: "'DM Mono', monospace", fontSize: 13 }}>Loading reports…</div>
+      )}
+
+      {tab === "reports" && !(reportsLoading && reports.length === 0) && (
         <div style={{ ...cardStyle, overflowX: "auto" }}>
           <table style={tableStyle}>
             <thead>
@@ -1796,10 +1808,25 @@ export function AdminPage({ token, user }) {
               ))}
             </tbody>
           </table>
+          {reports.length > 0 && reports.length < reportsTotal && (
+            <div style={{ padding: 16, textAlign: "center" }}>
+              <button
+                onClick={() => fetchReports(reports.length, true)}
+                disabled={reportsLoading}
+                style={{ background: "transparent", color: "#94a3b8", border: "1px solid #1e2733", borderRadius: 9999, padding: "8px 14px", cursor: reportsLoading ? "wait" : "pointer", fontWeight: 600 }}
+              >
+                {reportsLoading ? "Loading…" : "Load more"}
+              </button>
+            </div>
+          )}
         </div>
       )}
 
-      {!loading && tab === "logs" && (
+      {tab === "logs" && logsLoading && logs.length === 0 && (
+        <div style={{ padding: 24, textAlign: "center", color: "#4a5568", fontFamily: "'DM Mono', monospace", fontSize: 13 }}>Loading moderation logs…</div>
+      )}
+
+      {tab === "logs" && !(logsLoading && logs.length === 0) && (
         <div style={{ ...cardStyle, overflowX: "auto" }}>
           <table style={tableStyle}>
             <thead>
@@ -1822,10 +1849,25 @@ export function AdminPage({ token, user }) {
               ))}
             </tbody>
           </table>
+          {logs.length > 0 && logs.length < logsTotal && (
+            <div style={{ padding: 16, textAlign: "center" }}>
+              <button
+                onClick={() => fetchLogs(logs.length, true)}
+                disabled={logsLoading}
+                style={{ background: "transparent", color: "#94a3b8", border: "1px solid #1e2733", borderRadius: 9999, padding: "8px 14px", cursor: logsLoading ? "wait" : "pointer", fontWeight: 600 }}
+              >
+                {logsLoading ? "Loading…" : "Load more"}
+              </button>
+            </div>
+          )}
         </div>
       )}
 
-      {!loading && tab === "stats" && (
+      {tab === "stats" && statsLoading && !reportStats && !logStats && (
+        <div style={{ padding: 24, textAlign: "center", color: "#4a5568", fontFamily: "'DM Mono', monospace", fontSize: 13 }}>Loading stats…</div>
+      )}
+
+      {tab === "stats" && !(statsLoading && !reportStats && !logStats) && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12 }}>
           {statEntries.length === 0 ? (
             <div style={{ ...cardStyle, color: "#4a5568" }}>No stats available.</div>
