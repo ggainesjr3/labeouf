@@ -1,6 +1,17 @@
 import AdminDashboard from "./components/AdminDashboard.jsx";
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { API_BASE as API, mediaUrl } from "./apiBase.js";
+import { useMediaQuery, MOBILE_MQ } from "./useMediaQuery.js";
+
+const TAP_MIN = 44;
+const tapTarget = (extra = {}) => ({
+  minWidth: TAP_MIN,
+  minHeight: TAP_MIN,
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  ...extra,
+});
 const LABEL_CONFIG = {
   POSITIVE: { color: "#4ade80", bg: "rgba(74,222,128,0.1)", icon: "↑" },
   NEGATIVE: { color: "#f87171", bg: "rgba(248,113,113,0.1)", icon: "↓" },
@@ -51,7 +62,7 @@ async function registerPushNotifications(token) {
   const permission = await Notification.requestPermission();
   if (permission !== "granted") return;
 
-  const registration = await navigator.serviceWorker.register("/push-sw.js");
+  const registration = await navigator.serviceWorker.register("/sw.js");
   const existing = await registration.pushManager.getSubscription();
   const subscription = existing || await registration.pushManager.subscribe({
     userVisibleOnly: true,
@@ -62,6 +73,123 @@ async function registerPushNotifications(token) {
     method: "POST",
     body: JSON.stringify(subscription),
   });
+}
+
+function isNativeApp() {
+  return typeof window !== "undefined" && window.Capacitor?.isNativePlatform?.();
+}
+
+function isMobileBrowser() {
+  if (typeof window === "undefined") return false;
+  const ua = navigator.userAgent || "";
+  return /Android|iPhone|iPad|iPod/i.test(ua) || window.innerWidth <= 768;
+}
+
+function isIOSBrowser() {
+  if (typeof window === "undefined") return false;
+  const ua = navigator.userAgent || "";
+  return /iPhone|iPad|iPod/i.test(ua) && !window.MSStream;
+}
+
+function PwaInstallBanner() {
+  const [visible, setVisible] = useState(false);
+  const [isIOS, setIsIOS] = useState(false);
+  const [canInstall, setCanInstall] = useState(false);
+  const installPromptRef = useRef(null);
+
+  useEffect(() => {
+    if (isNativeApp()) return;
+    const visits = parseInt(localStorage.getItem("lb_pwa_visits") || "0", 10) + 1;
+    localStorage.setItem("lb_pwa_visits", String(visits));
+  }, []);
+
+  useEffect(() => {
+    if (isNativeApp()) return;
+    if (localStorage.getItem("lb_pwa_dismissed")) return;
+    if (window.matchMedia("(display-mode: standalone)").matches) return;
+
+    const visits = parseInt(localStorage.getItem("lb_pwa_visits") || "0", 10);
+    if (visits < 2 || !isMobileBrowser()) return;
+
+    setIsIOS(isIOSBrowser());
+    setVisible(true);
+
+    const onPrompt = (e) => {
+      e.preventDefault();
+      installPromptRef.current = e;
+      setCanInstall(true);
+    };
+    window.addEventListener("beforeinstallprompt", onPrompt);
+    return () => window.removeEventListener("beforeinstallprompt", onPrompt);
+  }, []);
+
+  const dismiss = () => {
+    localStorage.setItem("lb_pwa_dismissed", "1");
+    setVisible(false);
+  };
+
+  const install = async () => {
+    const prompt = installPromptRef.current;
+    if (!prompt) return;
+    prompt.prompt();
+    await prompt.userChoice.catch(() => {});
+    installPromptRef.current = null;
+    setCanInstall(false);
+    dismiss();
+  };
+
+  if (!visible) return null;
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        bottom: 16,
+        left: 16,
+        right: 16,
+        zIndex: 1000,
+        background: "#0d1117",
+        border: "1px solid #1e2733",
+        borderRadius: 14,
+        padding: "14px 16px",
+        boxShadow: "0 8px 32px rgba(0,0,0,0.45)",
+        display: "flex",
+        alignItems: "flex-start",
+        gap: 12,
+        maxWidth: 480,
+        margin: "0 auto",
+      }}
+    >
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontWeight: 700, fontSize: 14, color: "#e7edf3", marginBottom: 4 }}>
+          Add LaBeouf to your home screen
+        </div>
+        <div style={{ fontSize: 13, color: "#94a3b8", lineHeight: 1.45 }}>
+          {isIOS
+            ? 'Tap Share, then "Add to Home Screen" for a full-screen app experience.'
+            : "Install LaBeouf for quick access and a near-native experience."}
+        </div>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8, flexShrink: 0 }}>
+        {!isIOS && canInstall && (
+          <button
+            type="button"
+            onClick={install}
+            style={{ background: "#1d9bf0", color: "#fff", border: "none", borderRadius: 9999, padding: "8px 14px", fontWeight: 700, fontSize: 12, cursor: "pointer", fontFamily: "'Sora', sans-serif", whiteSpace: "nowrap" }}
+          >
+            Install
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={dismiss}
+          style={{ background: "transparent", color: "#64748b", border: "none", padding: "4px 8px", fontSize: 12, cursor: "pointer", fontFamily: "'Sora', sans-serif" }}
+        >
+          Not now
+        </button>
+      </div>
+    </div>
+  );
 }
 
 function Avatar({ name, size = 40, url, onClick }) {
@@ -279,7 +407,7 @@ export function PostCard({ post, token, onNavigate, currentUser, onBookmarkChang
   });
 
   return (
-    <article style={{ borderBottom: "1px solid #1e2733", position: "relative" }}>
+    <article className="post-card" style={{ borderBottom: "1px solid #1e2733", position: "relative", overflow: "hidden" }}>
       {post.isRepost && (
         <div style={{ padding: "8px 20px 0 56px", color: "#4a5568", fontSize: 12, fontFamily: "'DM Mono', monospace", display: "flex", alignItems: "center", gap: 6 }}>
           <span>⟳</span> <span style={{ cursor: "pointer" }} onClick={() => onNavigate("profile", post.repostedBy?.username)}>{post.repostedBy?.displayName || post.repostedBy?.username}</span> reposted
@@ -307,8 +435,8 @@ export function PostCard({ post, token, onNavigate, currentUser, onBookmarkChang
             </div>
           )}
           {post.videoUrl && (
-            <div style={{ margin: "0 0 10px", borderRadius: 12, overflow: "hidden", border: "1px solid #1e2733", maxWidth: "min(100%, 500px)" }}>
-              <video src={mediaUrl(post.videoUrl)} controls playsInline style={{ width: "100%", display: "block", maxWidth: 500 }} />
+            <div style={{ margin: "0 0 10px", borderRadius: 12, overflow: "hidden", border: "1px solid #1e2733", maxWidth: "100%" }}>
+              <video src={mediaUrl(post.videoUrl)} controls playsInline style={{ width: "100%", display: "block", maxWidth: "100%" }} />
             </div>
           )}
           <div style={{ display: "flex", gap: 4, marginBottom: 8 }}>
@@ -526,7 +654,7 @@ export function Composer({ token, onPost }) {
   };
 
   return (
-    <div style={{ padding: "16px 20px", borderBottom: "1px solid #1e2733" }}>
+    <div className="composer" style={{ padding: "16px 20px", borderBottom: "1px solid #1e2733" }}>
       <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/gif,image/webp" capture="environment" style={{ display: "none" }} onChange={onPickImage} />
       <input ref={videoInputRef} type="file" accept="video/mp4,video/webm,video/quicktime" style={{ display: "none" }} onChange={onPickVideo} />
       <input ref={recordVideoInputRef} type="file" accept="video/mp4,video/webm,video/quicktime" capture="camcorder" style={{ display: "none" }} onChange={onPickVideo} />
@@ -560,17 +688,17 @@ export function Composer({ token, onPost }) {
           {error && <p style={{ color: "#f87171", fontSize: 13, margin: "4px 0" }}>{error}</p>}
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 8 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <button type="button" disabled={posting} onClick={() => !posting && fileInputRef.current?.click()} title="Add image" style={{ background: "none", border: "none", cursor: posting ? "default" : "pointer", padding: 4, borderRadius: 9999, color: "#1d9bf0", display: "flex", alignItems: "center", justifyContent: "center", opacity: posting ? 0.5 : 1 }} onMouseEnter={e => { e.currentTarget.style.background = "rgba(29,155,240,0.12)"; }} onMouseLeave={e => { e.currentTarget.style.background = "none"; }}>
+              <button type="button" disabled={posting} onClick={() => !posting && fileInputRef.current?.click()} title="Add image" aria-label="Add image" style={{ ...tapTarget(), background: "none", border: "none", cursor: posting ? "default" : "pointer", borderRadius: 9999, color: "#1d9bf0", opacity: posting ? 0.5 : 1 }} onMouseEnter={e => { e.currentTarget.style.background = "rgba(29,155,240,0.12)"; }} onMouseLeave={e => { e.currentTarget.style.background = "none"; }}>
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><circle cx="8.5" cy="8.5" r="1.5" /><path d="M21 15l-5-5L5 21" /></svg>
               </button>
-              <button type="button" disabled={posting} onClick={() => !posting && videoInputRef.current?.click()} title="Add video" style={{ background: "none", border: "none", cursor: posting ? "default" : "pointer", padding: 4, borderRadius: 9999, color: "#1d9bf0", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, lineHeight: 1, opacity: posting ? 0.5 : 1 }} onMouseEnter={e => { e.currentTarget.style.background = "rgba(29,155,240,0.12)"; }} onMouseLeave={e => { e.currentTarget.style.background = "none"; }}>🎥</button>
-              <button type="button" disabled={posting} onClick={() => !posting && recordVideoInputRef.current?.click()} title="Record video" style={{ background: "none", border: "none", cursor: posting ? "default" : "pointer", padding: 4, borderRadius: 9999, color: "#1d9bf0", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, lineHeight: 1, opacity: posting ? 0.5 : 1 }} onMouseEnter={e => { e.currentTarget.style.background = "rgba(29,155,240,0.12)"; }} onMouseLeave={e => { e.currentTarget.style.background = "none"; }}>🎬</button>
+              <button type="button" disabled={posting} onClick={() => !posting && videoInputRef.current?.click()} title="Add video" aria-label="Add video" style={{ ...tapTarget(), background: "none", border: "none", cursor: posting ? "default" : "pointer", borderRadius: 9999, color: "#1d9bf0", fontSize: 20, lineHeight: 1, opacity: posting ? 0.5 : 1 }} onMouseEnter={e => { e.currentTarget.style.background = "rgba(29,155,240,0.12)"; }} onMouseLeave={e => { e.currentTarget.style.background = "none"; }}>🎥</button>
+              <button type="button" disabled={posting} onClick={() => !posting && recordVideoInputRef.current?.click()} title="Record video" aria-label="Record video" style={{ ...tapTarget(), background: "none", border: "none", cursor: posting ? "default" : "pointer", borderRadius: 9999, color: "#1d9bf0", fontSize: 20, lineHeight: 1, opacity: posting ? 0.5 : 1 }} onMouseEnter={e => { e.currentTarget.style.background = "rgba(29,155,240,0.12)"; }} onMouseLeave={e => { e.currentTarget.style.background = "none"; }}>🎬</button>
               <div style={{ width: 28, height: 28, position: "relative" }}>
                 <svg viewBox="0 0 36 36" style={{ transform: "rotate(-90deg)", width: 28, height: 28 }}><circle cx="18" cy="18" r="15" fill="none" stroke="#1e2733" strokeWidth="3" /><circle cx="18" cy="18" r="15" fill="none" stroke={remaining < 20 ? (remaining < 0 ? "#ef4444" : "#f59e0b") : "#1d9bf0"} strokeWidth="3" strokeDasharray={`${Math.max(0, (1 - text.length / max) * 94.2)} 94.2`} /></svg>
                 {remaining < 20 && <span style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, color: remaining < 0 ? "#ef4444" : "#f59e0b", fontFamily: "'DM Mono', monospace" }}>{remaining}</span>}
               </div>
             </div>
-            <button onClick={handlePost} disabled={!canPost} style={{ background: canPost ? "#1d9bf0" : "#0f4f7a", color: canPost ? "#fff" : "#4a7a99", border: "none", borderRadius: 9999, padding: "8px 20px", fontSize: 15, fontWeight: 700, cursor: canPost ? "pointer" : "default", fontFamily: "'Sora', sans-serif" }}>{isUploading ? "Uploading…" : posting ? "Posting..." : "Post"}</button>
+            <button onClick={handlePost} disabled={!canPost} style={{ ...tapTarget(), background: canPost ? "#1d9bf0" : "#0f4f7a", color: canPost ? "#fff" : "#4a7a99", border: "none", borderRadius: 9999, padding: "0 20px", fontSize: 15, fontWeight: 700, cursor: canPost ? "pointer" : "default", fontFamily: "'Sora', sans-serif" }}>{isUploading ? "Uploading…" : posting ? "Posting..." : "Post"}</button>
           </div>
         </div>
       </div>
@@ -717,7 +845,7 @@ function UserListItem({ user, token, onNavigate }) {
   );
 }
 
-function ProfilePage({ username, token, currentUser, onNavigate, onUpdateUser }) {
+function ProfilePage({ username, token, currentUser, onNavigate, onUpdateUser, isMobile }) {
   const [profile, setProfile] = useState(null);
   const [posts, setPosts] = useState([]);
   const [followers, setFollowers] = useState([]);
@@ -794,15 +922,15 @@ function ProfilePage({ username, token, currentUser, onNavigate, onUpdateUser })
           <Avatar name={profile.username} url={profile.avatarUrl} size={64} />
         </div>
       </div>
-      <div style={{ padding: "48px 20px 20px", borderBottom: "1px solid #1e2733" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-          <div>
+      <div style={{ padding: isMobile ? "48px 16px 16px" : "48px 20px 20px", borderBottom: "1px solid #1e2733" }}>
+        <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", justifyContent: "space-between", alignItems: isMobile ? "stretch" : "flex-start", gap: isMobile ? 16 : 0 }}>
+          <div style={{ minWidth: 0 }}>
             <h2 style={{ margin: 0, color: "#e7edf3", fontSize: 20, fontWeight: 800, fontFamily: "'Sora', sans-serif" }}>{profile.displayName || profile.username}</h2>
             <p style={{ margin: "2px 0 8px", color: "#4a5568", fontSize: 14, fontFamily: "'DM Mono', monospace" }}>@{profile.username}</p>
-            {profile.bio && <p style={{ margin: "0 0 12px", color: "#c9d6e3", fontSize: 15, lineHeight: 1.5 }}>{profile.bio}</p>}
-            <div style={{ display: "flex", gap: 20 }}>
+            {profile.bio && <p style={{ margin: "0 0 12px", color: "#c9d6e3", fontSize: 15, lineHeight: 1.5, wordBreak: "break-word" }}>{profile.bio}</p>}
+            <div style={{ display: "flex", flexWrap: "wrap", gap: isMobile ? 12 : 20 }}>
               {tabs.map(({ key, label, count }) => (
-                <button key={key} onClick={() => setTab(key)} style={{ background: "none", border: "none", cursor: "pointer", padding: 0 }}>
+                <button key={key} onClick={() => setTab(key)} style={{ ...tapTarget({ minWidth: "auto", padding: "4px 0" }), background: "none", border: "none", cursor: "pointer" }}>
                   <span style={{ fontSize: 14, color: tab === key ? "#e7edf3" : "#4a5568", fontFamily: "'DM Mono', monospace" }}>
                     <span style={{ color: "#e7edf3", fontWeight: 700 }}>{count ?? 0}</span> {label}
                   </span>
@@ -811,12 +939,12 @@ function ProfilePage({ username, token, currentUser, onNavigate, onUpdateUser })
             </div>
           </div>
           {isOwnProfile ? (
-            <button onClick={() => setShowEdit(true)} style={{ background: "none", color: "#e7edf3", border: "2px solid #1e2733", borderRadius: 9999, padding: "8px 20px", fontWeight: 700, fontSize: 14, cursor: "pointer", fontFamily: "'Sora', sans-serif", transition: "border-color 0.15s" }}
+            <button onClick={() => setShowEdit(true)} style={{ ...tapTarget(), alignSelf: isMobile ? "stretch" : "auto", background: "none", color: "#e7edf3", border: "2px solid #1e2733", borderRadius: 9999, padding: "0 20px", fontWeight: 700, fontSize: 14, cursor: "pointer", fontFamily: "'Sora', sans-serif", transition: "border-color 0.15s" }}
               onMouseEnter={e => e.currentTarget.style.borderColor = "#4a5568"}
               onMouseLeave={e => e.currentTarget.style.borderColor = "#1e2733"}
             >Edit profile</button>
           ) : token && (
-            <button onClick={handleFollow} disabled={followLoading} style={{ background: isFollowing ? "none" : "#e7edf3", color: isFollowing ? "#e7edf3" : "#060b14", border: "2px solid #e7edf3", borderRadius: 9999, padding: "8px 20px", fontWeight: 700, fontSize: 14, cursor: "pointer", fontFamily: "'Sora', sans-serif" }}>
+            <button onClick={handleFollow} disabled={followLoading} style={{ ...tapTarget(), alignSelf: isMobile ? "stretch" : "auto", background: isFollowing ? "none" : "#e7edf3", color: isFollowing ? "#e7edf3" : "#060b14", border: "2px solid #e7edf3", borderRadius: 9999, padding: "0 20px", fontWeight: 700, fontSize: 14, cursor: "pointer", fontFamily: "'Sora', sans-serif" }}>
               {followLoading ? "..." : isFollowing ? "Following" : "Follow"}
             </button>
           )}
@@ -834,7 +962,7 @@ function ProfilePage({ username, token, currentUser, onNavigate, onUpdateUser })
   );
 }
 
-function MessagesPage({ token, currentUser, onNavigate }) {
+function MessagesPage({ token, currentUser, onNavigate, isMobile }) {
   const [inbox, setInbox] = useState([]);
   const [activeThread, setActiveThread] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -937,11 +1065,15 @@ function MessagesPage({ token, currentUser, onNavigate }) {
 
   if (!token) return <div style={{ padding: 40, textAlign: "center", color: "#4a5568" }}>Sign in to view messages.</div>;
 
+  const showList = !isMobile || !activeThread;
+  const showThread = !isMobile || !!activeThread;
+
   return (
-    <div style={{ display: "flex", height: "calc(100vh - 60px)" }}>
-      <div style={{ width: 320, borderRight: "1px solid #1e2733", display: "flex", flexDirection: "column", flexShrink: 0 }}>
-        <div style={{ padding: "16px 20px", borderBottom: "1px solid #1e2733" }}>
-          <h2 style={{ margin: "0 0 12px", color: "#e7edf3", fontWeight: 800, fontFamily: "'Sora', sans-serif" }}>Messages</h2>
+    <div className="messages-layout" style={{ display: "flex", height: isMobile ? "calc(100dvh - 120px)" : "calc(100vh - 60px)", minWidth: 0, overflow: "hidden" }}>
+      {showList && (
+      <div style={{ width: isMobile ? "100%" : 320, borderRight: isMobile ? "none" : "1px solid #1e2733", display: "flex", flexDirection: "column", flexShrink: 0, minWidth: 0 }}>
+        <div style={{ padding: isMobile ? "12px 16px" : "16px 20px", borderBottom: "1px solid #1e2733" }}>
+          {!isMobile && <h2 style={{ margin: "0 0 12px", color: "#e7edf3", fontWeight: 800, fontFamily: "'Sora', sans-serif" }}>Messages</h2>}
           <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#0d1117", border: "1px solid #1e2733", borderRadius: 9999, padding: "8px 14px" }}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4a5568" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
             <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Find a person..."
@@ -987,9 +1119,12 @@ function MessagesPage({ token, currentUser, onNavigate }) {
           }
         </div>
       </div>
+      )}
 
-      <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+      {showThread && (
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
         {!activeThread ? (
+          !isMobile && (
           <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "#4a5568" }}>
             <div style={{ textAlign: "center" }}>
               <div style={{ fontSize: 40, marginBottom: 12 }}>✉️</div>
@@ -997,9 +1132,20 @@ function MessagesPage({ token, currentUser, onNavigate }) {
               <p style={{ fontSize: 14, marginTop: 8 }}>Search for someone to start a conversation</p>
             </div>
           </div>
+          )
         ) : (
           <>
-            <div style={{ padding: "16px 20px", borderBottom: "1px solid #1e2733", display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{ padding: isMobile ? "12px 16px" : "16px 20px", borderBottom: "1px solid #1e2733", display: "flex", alignItems: "center", gap: 12 }}>
+              {isMobile && (
+                <button
+                  type="button"
+                  aria-label="Back to inbox"
+                  onClick={() => setActiveThread(null)}
+                  style={{ ...tapTarget(), flexShrink: 0, background: "none", border: "none", color: "#e7edf3", cursor: "pointer", fontSize: 20 }}
+                >
+                  ←
+                </button>
+              )}
               <Avatar name={activeThread.username} url={activeThread.avatarUrl} size={36} onClick={() => onNavigate("profile", activeThread.username)} />
               <div>
                 <div style={{ color: "#e7edf3", fontWeight: 700 }}>{activeThread.displayName || activeThread.username}</div>
@@ -1026,19 +1172,20 @@ function MessagesPage({ token, currentUser, onNavigate }) {
               <div ref={messagesEndRef} />
             </div>
             {sendError && <div style={{ padding: "8px 20px 0", color: "#f87171", fontSize: 13, fontFamily: "'DM Mono', monospace" }}>{sendError}</div>}
-            <div style={{ padding: "12px 20px", borderTop: "1px solid #1e2733", display: "flex", gap: 10 }}>
+            <div style={{ padding: isMobile ? "12px 16px" : "12px 20px", borderTop: "1px solid #1e2733", display: "flex", gap: 10 }}>
               <input value={messageText} onChange={e => setMessageText(e.target.value)}
                 onKeyDown={e => e.key === "Enter" && handleSend()}
                 placeholder={`Message @${activeThread.username}...`}
-                style={{ flex: 1, background: "#0d1117", border: "1px solid #1e2733", borderRadius: 9999, padding: "10px 16px", color: "#e7edf3", fontSize: 14, outline: "none", fontFamily: "'Sora', sans-serif" }}
+                style={{ flex: 1, minWidth: 0, background: "#0d1117", border: "1px solid #1e2733", borderRadius: 9999, padding: "12px 16px", minHeight: TAP_MIN, color: "#e7edf3", fontSize: 14, outline: "none", fontFamily: "'Sora', sans-serif", boxSizing: "border-box" }}
               />
-              <button onClick={handleSend} disabled={!messageText.trim() || sending} style={{ background: "#1d9bf0", color: "#fff", border: "none", borderRadius: 9999, padding: "10px 20px", fontWeight: 700, fontSize: 14, cursor: "pointer", fontFamily: "'Sora', sans-serif", opacity: !messageText.trim() ? 0.5 : 1 }}>
+              <button onClick={handleSend} disabled={!messageText.trim() || sending} style={{ ...tapTarget(), flexShrink: 0, background: "#1d9bf0", color: "#fff", border: "none", borderRadius: 9999, padding: "0 20px", fontWeight: 700, fontSize: 14, cursor: "pointer", fontFamily: "'Sora', sans-serif", opacity: !messageText.trim() ? 0.5 : 1 }}>
                 {sending ? "..." : "Send"}
               </button>
             </div>
           </>
         )}
       </div>
+      )}
     </div>
   );
 }
@@ -1289,6 +1436,81 @@ function AuthModal({ onAuth, onClose }) {
   );
 }
 
+function BottomNav({ user, page, onNavigate, onSignIn, unreadCount }) {
+  const items = [
+    { icon: "⚡", label: "Home", page: "home" },
+    { icon: "🔍", label: "Search", page: "search" },
+    { icon: "✉️", label: "Messages", page: "messages", badge: unreadCount },
+    { icon: "🔔", label: "Notifications", page: "notifications" },
+    { icon: "👤", label: "Profile", page: "profile", username: user?.username },
+  ];
+
+  return (
+    <nav className="bottom-nav" aria-label="Main navigation">
+      {items.map(({ icon, label, page: p, username, badge }) => {
+        if (p === "profile" && !user) {
+          return (
+            <button
+              key={label}
+              type="button"
+              onClick={onSignIn}
+              className="bottom-nav-item"
+              style={bottomNavBtnStyle(false)}
+              aria-label="Sign in"
+            >
+              <span style={{ fontSize: 22 }}>{icon}</span>
+              <span className="bottom-nav-label">{label}</span>
+            </button>
+          );
+        }
+        if (p === "profile" && !username) return null;
+        const active = page === p;
+        return (
+          <button
+            key={label}
+            type="button"
+            onClick={() => onNavigate(p, username)}
+            className="bottom-nav-item"
+            style={bottomNavBtnStyle(active)}
+            aria-label={label}
+            aria-current={active ? "page" : undefined}
+          >
+            <span style={{ fontSize: 22, position: "relative" }}>
+              {icon}
+              {badge > 0 && (
+                <span style={{ position: "absolute", top: -6, right: -8, background: "#1d9bf0", color: "#fff", borderRadius: 9999, fontSize: 9, padding: "1px 5px", fontFamily: "'DM Mono', monospace", fontWeight: 700, minWidth: 16, textAlign: "center" }}>
+                  {badge > 99 ? "99+" : badge}
+                </span>
+              )}
+            </span>
+            <span className="bottom-nav-label">{label}</span>
+          </button>
+        );
+      })}
+    </nav>
+  );
+}
+
+function bottomNavBtnStyle(active) {
+  return {
+    flex: 1,
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 2,
+    minHeight: TAP_MIN,
+    background: "none",
+    border: "none",
+    color: active ? "#1d9bf0" : "#64748b",
+    cursor: "pointer",
+    fontFamily: "'Sora', sans-serif",
+    fontSize: 10,
+    fontWeight: active ? 700 : 500,
+    padding: "6px 4px",
+  };
+}
+
 function LeftSidebar({ user, page, onNavigate, onSignIn, onSignOut, unreadCount }) {
   const navItems = [
     { icon: "⚡", label: "Home", page: "home" },
@@ -1314,13 +1536,13 @@ function LeftSidebar({ user, page, onNavigate, onSignIn, onSignOut, unreadCount 
                 {icon}
                 {badge > 0 && <span style={{ position: "absolute", top: -4, right: -4, background: "#1d9bf0", color: "#fff", borderRadius: 9999, fontSize: 9, padding: "1px 4px", fontFamily: "'DM Mono', monospace", fontWeight: 700 }}>{badge}</span>}
               </span>
-              <span>{label}</span>
+              <span className="nav-label">{label}</span>
             </button>
           )
         ))}
       </nav>
       {user ? (
-        <button style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", background: "none", border: "none", padding: "12px 16px", borderRadius: 9999, cursor: "pointer", transition: "background 0.15s" }}
+        <button className="user-info" style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", background: "none", border: "none", padding: "12px 16px", borderRadius: 9999, cursor: "pointer", transition: "background 0.15s" }}
           onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,0.08)"}
           onMouseLeave={e => e.currentTarget.style.background = "none"}
           onClick={onSignOut}
@@ -1465,6 +1687,7 @@ export default function App() {
   const [pageParam, setPageParam] = useState(null);
   const [newPost, setNewPost] = useState(null);
   const [unreadCount, setUnreadCount] = useState(0);
+  const isMobile = useMediaQuery(MOBILE_MQ);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -1574,34 +1797,55 @@ export default function App() {
         @import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=DM+Mono:wght@400;500;600&display=swap');
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
         html, body, #root { height: 100%; }
-        body { background: #060b14; color: #e7edf3; font-family: 'Sora', sans-serif; -webkit-font-smoothing: antialiased; }
+        body { background: #060b14; color: #e7edf3; font-family: 'Sora', sans-serif; -webkit-font-smoothing: antialiased; overflow-x: hidden; }
         textarea, input { font-family: 'Sora', sans-serif; }
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: #1e2733; border-radius: 3px; }
         * { scrollbar-width: thin; scrollbar-color: #1e2733 transparent; }
+        .app-shell { overflow-x: hidden; max-width: 100%; }
+        .main-content { min-width: 0; max-width: 100%; }
+        .bottom-nav { display: none; }
+        .post-card img, .post-card video { max-width: 100%; height: auto; }
         @media (max-width: 1024px) {
           .right-sidebar { display: none !important; }
         }
-        @media (max-width: 768px) {
-          .left-sidebar { width: 60px !important; }
-          .left-sidebar span:last-child { display: none !important; }
-          .left-sidebar .user-info { display: none !important; }
-          .main-content { margin-left: 0 !important; }
+        @media (max-width: 767px) {
+          .left-sidebar { display: none !important; }
+          .bottom-nav {
+            display: flex !important;
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 100;
+            background: rgba(6, 11, 20, 0.96);
+            backdrop-filter: blur(12px);
+            border-top: 1px solid #1e2733;
+            padding-bottom: env(safe-area-inset-bottom, 0);
+          }
+          .app-shell {
+            padding-bottom: calc(56px + env(safe-area-inset-bottom, 0));
+          }
+          .app-layout { max-width: 100% !important; padding: 0 !important; }
+          .main-content { border-left: none !important; border-right: none !important; }
+          .composer textarea { font-size: 16px !important; }
+          .home-signin-banner { bottom: calc(56px + env(safe-area-inset-bottom, 0)) !important; }
         }
-        @media (max-width: 480px) {
-          .left-sidebar { width: 48px !important; padding: 8px 4px !important; }
+        @media (min-width: 768px) and (max-width: 1024px) {
+          .left-sidebar { width: 72px !important; }
+          .left-sidebar .nav-label, .left-sidebar .user-info { display: none !important; }
         }
       `}</style>
 
       {showAuth && <AuthModal onAuth={handleAuth} onClose={() => setShowAuth(false)} />}
 
-      <div style={{ maxWidth: 1230, margin: "0 auto", display: "flex", minHeight: "100vh", padding: "0 8px" }}>
+      <div className="app-shell app-layout" style={{ maxWidth: 1230, margin: "0 auto", display: "flex", minHeight: "100vh", padding: isMobile ? 0 : "0 8px", width: "100%" }}>
         <div className="left-sidebar" style={{ width: 260, flexShrink: 0, padding: "12px 12px 12px 0", display: "flex", flexDirection: "column", position: "sticky", top: 0, height: "100vh" }}>
           <LeftSidebar user={user} page={page} onNavigate={handleNavigate} onSignIn={() => setShowAuth(true)} onSignOut={handleSignOut} unreadCount={unreadCount} />
         </div>
 
-        <main style={{ flex: 1, borderLeft: "1px solid #1e2733", borderRight: "1px solid #1e2733", minHeight: "100vh", minWidth: 0 }}>
+        <main className="main-content" style={{ flex: 1, borderLeft: "1px solid #1e2733", borderRight: "1px solid #1e2733", minHeight: "100vh", minWidth: 0, width: "100%" }}>
           <div style={{ position: "sticky", top: 0, zIndex: 10, background: "rgba(6,11,20,0.85)", backdropFilter: "blur(12px)", borderBottom: "1px solid #1e2733", padding: "14px 20px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
               {page !== "home" && (
@@ -1637,8 +1881,8 @@ export default function App() {
           {page === "hashtag" && <HashtagPage tag={pageParam} token={token} onNavigate={handleNavigate} currentUser={user} />}
           {page === "bookmarks" && <BookmarksPage token={token} onNavigate={handleNavigate} currentUser={user} />}
           {page === "notifications" && <NotificationsPage token={token} />}
-          {page === "messages" && <MessagesPage token={token} currentUser={user} onNavigate={handleNavigate} />}
-          {page === "profile" && <ProfilePage username={pageParam} token={token} currentUser={user} onNavigate={handleNavigate} onUpdateUser={handleUpdateUser} />}
+          {page === "messages" && <MessagesPage token={token} currentUser={user} onNavigate={handleNavigate} isMobile={isMobile} />}
+          {page === "profile" && <ProfilePage username={pageParam} token={token} currentUser={user} onNavigate={handleNavigate} onUpdateUser={handleUpdateUser} isMobile={isMobile} />}
           {page === "admin" && <AdminDashboard token={token} user={user} onNavigate={handleNavigate} onUserRefresh={handleUpdateUser} />}
         </main>
 
@@ -1648,6 +1892,16 @@ export default function App() {
         </div>
         )}
       </div>
+
+      {isMobile && page !== "admin" && (
+        <BottomNav
+          user={user}
+          page={page}
+          onNavigate={handleNavigate}
+          onSignIn={() => setShowAuth(true)}
+          unreadCount={unreadCount}
+        />
+      )}
     </>
   );
 }

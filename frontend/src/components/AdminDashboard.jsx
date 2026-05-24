@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import axios from "axios";
+import { useMediaQuery, MOBILE_MQ } from "../useMediaQuery.js";
 import { formatDistanceToNow, format, subDays, eachDayOfInterval } from "date-fns";
 import { API_BASE as API } from "../apiBase.js";
 import {
@@ -104,6 +105,7 @@ function aggregateReports(rows) {
 
 export default function AdminDashboard({ token, user, onNavigate, onUserRefresh }) {
   const client = useAdminAxios(token);
+  const isMobile = useMediaQuery(MOBILE_MQ);
   const [allowed, setAllowed] = useState(null);
   const [tab, setTab] = useState("reports");
   const [toast, setToast] = useState(null);
@@ -158,7 +160,7 @@ export default function AdminDashboard({ token, user, onNavigate, onUserRefresh 
   }
 
   return (
-    <div style={{ display: "flex", minHeight: "calc(100vh - 60px)", background: "#060b14" }}>
+    <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", minHeight: "calc(100vh - 60px)", background: "#060b14", overflowX: "hidden" }}>
       {toast && (
         <div
           style={{
@@ -182,16 +184,24 @@ export default function AdminDashboard({ token, user, onNavigate, onUserRefresh 
 
       <aside
         style={{
-          width: 200,
+          width: isMobile ? "100%" : 200,
           flexShrink: 0,
-          borderRight: "1px solid #1e2733",
-          padding: "16px 12px",
+          borderRight: isMobile ? "none" : "1px solid #1e2733",
+          borderBottom: isMobile ? "1px solid #1e2733" : "none",
+          padding: isMobile ? "12px 16px" : "16px 12px",
           background: "#0a0f1a",
+          display: "flex",
+          flexDirection: isMobile ? "row" : "column",
+          gap: isMobile ? 8 : 0,
+          overflowX: isMobile ? "auto" : "visible",
+          WebkitOverflowScrolling: "touch",
         }}
       >
-        <div style={{ fontSize: 11, color: "#4a5568", fontFamily: "'DM Mono', monospace", marginBottom: 12, letterSpacing: "0.08em" }}>
-          ADMIN
-        </div>
+        {!isMobile && (
+          <div style={{ fontSize: 11, color: "#4a5568", fontFamily: "'DM Mono', monospace", marginBottom: 12, letterSpacing: "0.08em" }}>
+            ADMIN
+          </div>
+        )}
         {[
           { id: "reports", label: "Reports" },
           { id: "logs", label: "Moderation Logs" },
@@ -202,18 +212,20 @@ export default function AdminDashboard({ token, user, onNavigate, onUserRefresh 
             onClick={() => setTab(t.id)}
             style={{
               display: "block",
-              width: "100%",
-              textAlign: "left",
-              padding: "10px 12px",
-              marginBottom: 4,
-              border: "none",
-              borderRadius: 8,
+              width: isMobile ? "auto" : "100%",
+              flexShrink: isMobile ? 0 : undefined,
+              textAlign: isMobile ? "center" : "left",
+              padding: isMobile ? "10px 16px" : "10px 12px",
+              marginBottom: isMobile ? 0 : 4,
+              border: isMobile ? "1px solid #1e2733" : "none",
+              borderRadius: 9999,
               cursor: "pointer",
               fontFamily: "'Sora', sans-serif",
               fontSize: 14,
               fontWeight: tab === t.id ? 700 : 500,
-              background: tab === t.id ? "rgba(29,155,240,0.15)" : "transparent",
+              background: tab === t.id ? "rgba(29,155,240,0.15)" : isMobile ? "#0d1117" : "transparent",
               color: tab === t.id ? "#1d9bf0" : "#c9d6e3",
+              whiteSpace: "nowrap",
             }}
           >
             {t.label}
@@ -264,7 +276,7 @@ export default function AdminDashboard({ token, user, onNavigate, onUserRefresh 
           </button>
         </header>
 
-        <div style={{ flex: 1, overflow: "auto", padding: 20 }}>
+        <div style={{ flex: 1, overflow: "auto", padding: isMobile ? 16 : 20, minWidth: 0 }}>
           {tab === "reports" && (
             <ReportsTab
               client={client}
@@ -377,8 +389,8 @@ function ReportsTab({ client, isActive, onNavigate, showToast, touchRefresh }) {
       ) : items.length === 0 ? (
         <Empty />
       ) : (
-        <div style={{ overflowX: "auto", border: "1px solid #1e2733", borderRadius: 12 }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, fontFamily: "'Sora', sans-serif" }}>
+        <div style={{ overflowX: "auto", border: "1px solid #1e2733", borderRadius: 12, WebkitOverflowScrolling: "touch" }}>
+          <table style={{ width: "100%", minWidth: 640, borderCollapse: "collapse", fontSize: 13, fontFamily: "'Sora', sans-serif" }}>
             <thead>
               <tr style={{ background: "#0d1117", color: "#94a3b8", textAlign: "left" }}>
                 <th style={th}>ID</th>
@@ -545,8 +557,8 @@ function ModerationLogsTab({ client, isActive, showToast, touchRefresh }) {
       ) : items.length === 0 ? (
         <Empty />
       ) : (
-        <div style={{ overflowX: "auto", border: "1px solid #1e2733", borderRadius: 12 }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, fontFamily: "'Sora', sans-serif" }}>
+        <div style={{ overflowX: "auto", border: "1px solid #1e2733", borderRadius: 12, WebkitOverflowScrolling: "touch" }}>
+          <table style={{ width: "100%", minWidth: 640, borderCollapse: "collapse", fontSize: 13, fontFamily: "'Sora', sans-serif" }}>
             <thead>
               <tr style={{ background: "#0d1117", color: "#94a3b8", textAlign: "left" }}>
                 <th style={th}>Content type</th>
@@ -753,7 +765,8 @@ function StatsTab({ client, isActive, showToast, touchRefresh }) {
 
       <div style={{ ...chartBox, marginTop: 20 }}>
         <h3 style={chartTitle}>Approval rate by detection method</h3>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+        <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
+        <table style={{ width: "100%", minWidth: 400, borderCollapse: "collapse", fontSize: 13 }}>
           <thead>
             <tr style={{ color: "#64748b", textAlign: "left" }}>
               <th style={th}>Method</th>
@@ -776,6 +789,7 @@ function StatsTab({ client, isActive, showToast, touchRefresh }) {
         {(!charts?.methodApprovalRates || charts.methodApprovalRates.length === 0) && (
           <div style={{ color: "#4a5568", padding: 16 }}>No moderation data yet.</div>
         )}
+        </div>
       </div>
         </>
       )}
