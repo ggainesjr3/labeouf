@@ -120,13 +120,13 @@ describe('Composer', () => {
     xhrInstances[0].complete();
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith('/api/posts', expect.objectContaining({
+      expect(global.fetch).toHaveBeenCalledWith('/posts', expect.objectContaining({
         method: 'POST',
         body: JSON.stringify({ text: 'hello', videoUrl: '/uploads/clip.mp4' }),
       }));
     });
     expect(xhrInstances[0].method).toBe('POST');
-    expect(xhrInstances[0].url).toBe('/api/upload');
+    expect(xhrInstances[0].url).toBe('/upload');
     expect(xhrInstances[0].headers.Authorization).toBe('Bearer token');
     expect(onPost).toHaveBeenCalledWith({ id: 1, text: 'hello', videoUrl: '/uploads/clip.mp4' });
   });
@@ -169,7 +169,7 @@ describe('Composer', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Post' }));
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith('/api/posts', expect.objectContaining({
+      expect(global.fetch).toHaveBeenCalledWith('/posts', expect.objectContaining({
         method: 'POST',
         body: JSON.stringify({ text: '', imageUrl: '/uploads/image.png' }),
       }));
@@ -209,7 +209,7 @@ describe('Composer', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Post' }));
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith('/api/posts', expect.objectContaining({
+      expect(global.fetch).toHaveBeenCalledWith('/posts', expect.objectContaining({
         method: 'POST',
         body: JSON.stringify({ text: '', videoUrl: '/uploads/video.mp4' }),
       }));
@@ -305,7 +305,7 @@ describe('AdminPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Approve' }));
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith('/api/admin/reports/5', expect.objectContaining({
+      expect(global.fetch).toHaveBeenCalledWith('/admin/reports/5', expect.objectContaining({
         method: 'PATCH',
         body: JSON.stringify({ status: 'approved' }),
       }));
