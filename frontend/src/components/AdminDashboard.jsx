@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import axios from "axios";
 import { formatDistanceToNow, format, subDays, eachDayOfInterval } from "date-fns";
+import { API_BASE as API } from "../apiBase.js";
 import {
   LineChart,
   Line,
@@ -14,7 +15,6 @@ import {
   Legend,
 } from "recharts";
 
-const API = "/api";
 const CHART_COLORS = ["#1d9bf0", "#6366f1", "#ec4899", "#4ade80", "#f59e0b", "#eab308", "#94a3b8"];
 
 function useAdminAxios(token) {
