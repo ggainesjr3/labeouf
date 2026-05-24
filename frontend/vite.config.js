@@ -15,6 +15,7 @@ export default defineConfig({
       '/health': 'http://localhost:3001',
       '/notifications': 'http://localhost:3001',
       '/admin': 'http://localhost:3001',
+      '/search': 'http://localhost:3001',
       '/reports': 'http://localhost:3001',
       '/uploads': 'http://localhost:3001',
     },

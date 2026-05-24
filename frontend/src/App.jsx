@@ -538,7 +538,7 @@ export function Composer({ token, onPost }) {
   const recordVideoInputRef = useRef(null);
   const max = 280;
   const remaining = max - text.length;
-  const IMAGE_MAX_BYTES = 5 * 1024 * 1024;
+  const IMAGE_MAX_BYTES = 10 * 1024 * 1024;
   const VIDEO_MAX_BYTES = 50 * 1024 * 1024;
   const hasAttachment = !!pendingImage || !!pendingVideo;
   const canPost = (text.trim().length > 0 || hasAttachment) && remaining >= 0 && !posting;
@@ -688,9 +688,7 @@ export function Composer({ token, onPost }) {
           {error && <p style={{ color: "#f87171", fontSize: 13, margin: "4px 0" }}>{error}</p>}
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 8 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <button type="button" disabled={posting} onClick={() => !posting && fileInputRef.current?.click()} title="Add image" aria-label="Add image" style={{ ...tapTarget(), background: "none", border: "none", cursor: posting ? "default" : "pointer", borderRadius: 9999, color: "#1d9bf0", opacity: posting ? 0.5 : 1 }} onMouseEnter={e => { e.currentTarget.style.background = "rgba(29,155,240,0.12)"; }} onMouseLeave={e => { e.currentTarget.style.background = "none"; }}>
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><circle cx="8.5" cy="8.5" r="1.5" /><path d="M21 15l-5-5L5 21" /></svg>
-              </button>
+              <button type="button" disabled={posting} onClick={() => !posting && fileInputRef.current?.click()} title="Add image" aria-label="Add image" style={{ ...tapTarget(), background: "none", border: "none", cursor: posting ? "default" : "pointer", borderRadius: 9999, color: "#1d9bf0", fontSize: 20, lineHeight: 1, opacity: posting ? 0.5 : 1 }} onMouseEnter={e => { e.currentTarget.style.background = "rgba(29,155,240,0.12)"; }} onMouseLeave={e => { e.currentTarget.style.background = "none"; }}>📷</button>
               <button type="button" disabled={posting} onClick={() => !posting && videoInputRef.current?.click()} title="Add video" aria-label="Add video" style={{ ...tapTarget(), background: "none", border: "none", cursor: posting ? "default" : "pointer", borderRadius: 9999, color: "#1d9bf0", fontSize: 20, lineHeight: 1, opacity: posting ? 0.5 : 1 }} onMouseEnter={e => { e.currentTarget.style.background = "rgba(29,155,240,0.12)"; }} onMouseLeave={e => { e.currentTarget.style.background = "none"; }}>🎥</button>
               <button type="button" disabled={posting} onClick={() => !posting && recordVideoInputRef.current?.click()} title="Record video" aria-label="Record video" style={{ ...tapTarget(), background: "none", border: "none", cursor: posting ? "default" : "pointer", borderRadius: 9999, color: "#1d9bf0", fontSize: 20, lineHeight: 1, opacity: posting ? 0.5 : 1 }} onMouseEnter={e => { e.currentTarget.style.background = "rgba(29,155,240,0.12)"; }} onMouseLeave={e => { e.currentTarget.style.background = "none"; }}>🎬</button>
               <div style={{ width: 28, height: 28, position: "relative" }}>
@@ -1261,25 +1259,24 @@ function BookmarksPage({ token, onNavigate, currentUser }) {
   );
 }
 
-function SearchPage({ token, onNavigate }) {
-  const [query, setQuery] = useState("");
-  const [results, setResults] = useState([]);
+function SearchPage({ token, onNavigate, query = "", onQueryChange = () => {} }) {
+  const [results, setResults] = useState({ users: [], posts: [] });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    if (!query.trim()) { setResults([]); setError(null); return; }
+    if (!query?.trim()) { setResults({ users: [], posts: [] }); setError(null); return; }
     let cancelled = false;
     const t = setTimeout(async () => {
       setLoading(true);
       setError(null);
       try {
-        const data = await apiFetch(`/users/search?q=${encodeURIComponent(query)}`, token);
-        if (!cancelled) setResults(data);
+        const data = await apiFetch(`/search?q=${encodeURIComponent(query)}`, token);
+        if (!cancelled) setResults({ users: data.users || [], posts: data.posts || [] });
       }
       catch (e) {
         if (!cancelled) {
-          setResults([]);
+          setResults({ users: [], posts: [] });
           setError(e.message || "Search failed.");
         }
       } finally {
@@ -1297,15 +1294,28 @@ function SearchPage({ token, onNavigate }) {
       <div style={{ padding: "16px 20px", borderBottom: "1px solid #1e2733", position: "sticky", top: 60, background: "#060b14", zIndex: 5 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, background: "#0d1117", border: "1px solid #1e2733", borderRadius: 9999, padding: "10px 16px" }}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4a5568" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-          <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search users..."
+          <input value={query} onChange={e => onQueryChange(e.target.value)} placeholder="Search users and posts..."
             style={{ background: "none", border: "none", outline: "none", color: "#e7edf3", fontSize: 16, flex: 1, fontFamily: "'Sora', sans-serif" }}
           />
         </div>
       </div>
       {loading && <div style={{ padding: 20, textAlign: "center", color: "#4a5568", fontSize: 13 }}>Searching...</div>}
       {error && <LoadError title="Search failed" message={error} />}
-      {results.map(user => <UserListItem key={user.id} user={user} token={token} onNavigate={onNavigate} />)}
-      {!loading && !error && query && results.length === 0 && <div style={{ padding: 40, textAlign: "center", color: "#4a5568" }}>No users found for "{query}"</div>}
+      {results.users?.length > 0 && (
+        <div>
+          <div style={{ padding: "12px 20px", color: "#64748b", fontSize: 11, fontFamily: "'DM Mono', monospace", textTransform: "uppercase", letterSpacing: "0.06em" }}>Users</div>
+          {results.users.map(user => <UserListItem key={user.id} user={user} token={token} onNavigate={onNavigate} />)}
+        </div>
+      )}
+      {results.posts?.length > 0 && (
+        <div>
+          <div style={{ padding: "12px 20px", color: "#64748b", fontSize: 11, fontFamily: "'DM Mono', monospace", textTransform: "uppercase", letterSpacing: "0.06em" }}>Posts</div>
+          {results.posts.map(post => (
+            <PostCard key={post.id} post={post} token={token} onNavigate={onNavigate} currentUser={null} />
+          ))}
+        </div>
+      )}
+      {!loading && !error && query && !(results.users?.length || results.posts?.length) && <div style={{ padding: 40, textAlign: "center", color: "#4a5568" }}>No results for "{query}"</div>}
     </div>
   );
 }
@@ -1371,19 +1381,45 @@ function NotificationsPage({ token }) {
   );
 }
 
-function AuthModal({ onAuth, onClose }) {
-  const [mode, setMode] = useState("login");
+function AuthModal({ onAuth, onClose, resetToken = null }) {
+  const [mode, setMode] = useState(resetToken ? "reset" : "login");
+  const [email, setEmail] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [message, setMessage] = useState(null);
 
   const handleSubmit = async () => {
-    if (!username || !password) return;
-    setLoading(true); setError(null);
+    setLoading(true); setError(null); setMessage(null);
     try {
-      const body = mode === "register" ? { username, password, displayName: displayName || username } : { username, password };
+      if (mode === "forgot") {
+        if (!email) { setLoading(false); return; }
+        await apiFetch("/auth/forgot-password", null, { method: "POST", body: JSON.stringify({ email }) });
+        setMessage("If that email exists, we sent a reset link.");
+        setLoading(false);
+        return;
+      }
+      if (mode === "reset") {
+        if (!password || password.length < 8) {
+          setError("Password must be at least 8 characters.");
+          setLoading(false);
+          return;
+        }
+        const data = await apiFetch("/auth/reset-password", null, {
+          method: "POST",
+          body: JSON.stringify({ token: resetToken, newPassword: password }),
+        });
+        onAuth(data.token, data.user);
+        setLoading(false);
+        return;
+      }
+      if (!email || !password) { setLoading(false); return; }
+      if (mode === "register" && !username) { setLoading(false); return; }
+      const body = mode === "register"
+        ? { email, username, password, displayName: displayName || username }
+        : { email, password };
       const data = await apiFetch(`/auth/${mode}`, null, { method: "POST", body: JSON.stringify(body) });
       onAuth(data.token, data.user);
     } catch (e) { setError(e.message); }
@@ -1397,8 +1433,14 @@ function AuthModal({ onAuth, onClose }) {
       <div style={{ background: "#0a0f1a", border: "1px solid #1e2733", borderRadius: 16, padding: 40, width: "100%", maxWidth: 400, boxShadow: "0 24px 80px rgba(0,0,0,0.6)" }} onClick={e => e.stopPropagation()}>
         <div style={{ marginBottom: 32, textAlign: "center" }}>
           <div style={{ fontSize: 32, marginBottom: 8 }}>⚡</div>
-          <h2 style={{ margin: 0, color: "#e7edf3", fontFamily: "'Sora', sans-serif", fontWeight: 800 }}>{mode === "login" ? "Sign in to LaBeouf" : "Join LaBeouf"}</h2>
+          <h2 style={{ margin: 0, color: "#e7edf3", fontFamily: "'Sora', sans-serif", fontWeight: 800 }}>{
+            mode === "login" ? "Sign in to LaBeouf"
+            : mode === "register" ? "Join LaBeouf"
+            : mode === "forgot" ? "Reset password"
+            : "Choose a new password"
+          }</h2>
         </div>
+        {(mode === "login" || mode === "register") && (
         <button onClick={() => { window.location.href = `${API}/auth/google`; }} style={{ width: "100%", background: "#fff", color: "#1a1a1a", border: "none", borderRadius: 9999, padding: "12px", fontSize: 15, fontWeight: 600, cursor: "pointer", fontFamily: "'Sora', sans-serif", display: "flex", alignItems: "center", justifyContent: "center", gap: 10, marginBottom: 20 }}
           onMouseEnter={e => e.currentTarget.style.background = "#e8e8e8"}
           onMouseLeave={e => e.currentTarget.style.background = "#fff"}
@@ -1411,26 +1453,49 @@ function AuthModal({ onAuth, onClose }) {
           </svg>
           Continue with Google
         </button>
+        )}
+        {(mode === "login" || mode === "register") && (
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
           <div style={{ flex: 1, height: 1, background: "#1e2733" }} />
           <span style={{ color: "#4a5568", fontSize: 13, fontFamily: "'DM Mono', monospace" }}>or</span>
           <div style={{ flex: 1, height: 1, background: "#1e2733" }} />
         </div>
+        )}
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          {mode === "register" && <input placeholder="Display name" value={displayName} onChange={e => setDisplayName(e.target.value)} style={inputStyle} onFocus={e => e.target.style.borderColor = "#1d9bf0"} onBlur={e => e.target.style.borderColor = "#1e2733"} />}
-          <input placeholder="Username" value={username} onChange={e => setUsername(e.target.value)} style={inputStyle} onFocus={e => e.target.style.borderColor = "#1d9bf0"} onBlur={e => e.target.style.borderColor = "#1e2733"} />
-          <input placeholder="Password" type="password" value={password} onChange={e => setPassword(e.target.value)} style={inputStyle} onKeyDown={e => e.key === "Enter" && handleSubmit()} onFocus={e => e.target.style.borderColor = "#1d9bf0"} onBlur={e => e.target.style.borderColor = "#1e2733"} />
+          {mode === "register" && <input placeholder="Display name" value={displayName} onChange={e => setDisplayName(e.target.value)} style={inputStyle} />}
+          {(mode === "login" || mode === "register" || mode === "forgot") && (
+            <input placeholder="Email" type="email" value={email} onChange={e => setEmail(e.target.value)} style={inputStyle} />
+          )}
+          {mode === "register" && (
+            <input placeholder="Username" value={username} onChange={e => setUsername(e.target.value)} style={inputStyle} />
+          )}
+          {(mode === "login" || mode === "register" || mode === "reset") && (
+            <input placeholder={mode === "reset" ? "New password" : "Password"} type="password" value={password} onChange={e => setPassword(e.target.value)} style={inputStyle} onKeyDown={e => e.key === "Enter" && handleSubmit()} />
+          )}
         </div>
         {error && <p style={{ color: "#f87171", fontSize: 13, margin: "12px 0 0", textAlign: "center", fontFamily: "'DM Mono', monospace" }}>{error}</p>}
+        {message && <p style={{ color: "#4ade80", fontSize: 13, margin: "12px 0 0", textAlign: "center", fontFamily: "'DM Mono', monospace" }}>{message}</p>}
         <button onClick={handleSubmit} disabled={loading} style={{ width: "100%", marginTop: 16, background: "#1d9bf0", color: "#fff", border: "none", borderRadius: 9999, padding: 14, fontSize: 16, fontWeight: 700, cursor: "pointer", fontFamily: "'Sora', sans-serif" }}>
-          {loading ? "..." : mode === "login" ? "Sign in" : "Create account"}
+          {loading ? "..." : mode === "login" ? "Sign in" : mode === "register" ? "Create account" : mode === "forgot" ? "Send reset link" : "Update password"}
         </button>
+        {mode === "login" && (
+          <p style={{ textAlign: "center", marginTop: 12 }}>
+            <button type="button" onClick={() => { setMode("forgot"); setError(null); setMessage(null); }} style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer", fontSize: 13 }}>Forgot password?</button>
+          </p>
+        )}
+        {(mode === "login" || mode === "register") && (
         <p style={{ textAlign: "center", marginTop: 20, color: "#4a5568", fontSize: 14 }}>
           {mode === "login" ? "Don't have an account? " : "Already have an account? "}
-          <button onClick={() => { setMode(m => m === "login" ? "register" : "login"); setError(null); }} style={{ background: "none", border: "none", color: "#1d9bf0", cursor: "pointer", fontSize: 14, fontWeight: 600 }}>
+          <button onClick={() => { setMode(m => m === "login" ? "register" : "login"); setError(null); setMessage(null); }} style={{ background: "none", border: "none", color: "#1d9bf0", cursor: "pointer", fontSize: 14, fontWeight: 600 }}>
             {mode === "login" ? "Sign up" : "Sign in"}
           </button>
         </p>
+        )}
+        {(mode === "forgot" || mode === "reset") && (
+          <p style={{ textAlign: "center", marginTop: 20 }}>
+            <button type="button" onClick={() => { setMode("login"); setError(null); setMessage(null); }} style={{ background: "none", border: "none", color: "#1d9bf0", cursor: "pointer", fontSize: 14, fontWeight: 600 }}>Back to sign in</button>
+          </p>
+        )}
       </div>
     </div>
   );
@@ -1687,7 +1752,19 @@ export default function App() {
   const [pageParam, setPageParam] = useState(null);
   const [newPost, setNewPost] = useState(null);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [passwordResetToken, setPasswordResetToken] = useState(null);
   const isMobile = useMediaQuery(MOBILE_MQ);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const resetParam = params.get("reset");
+    if (resetParam) {
+      setPasswordResetToken(resetParam);
+      setShowAuth(true);
+      window.history.replaceState({}, "", window.location.pathname || "/");
+    }
+  }, []);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -1765,7 +1842,7 @@ export default function App() {
   const handleAuth = useCallback((tok, usr) => {
     localStorage.setItem("lb_token", tok);
     localStorage.setItem("lb_user", JSON.stringify(usr));
-    setToken(tok); setUser(usr); setShowAuth(false);
+    setToken(tok); setUser(usr); setShowAuth(false); setPasswordResetToken(null);
     registerPushNotifications(tok).catch(() => {});
   }, []);
 
@@ -1838,7 +1915,7 @@ export default function App() {
         }
       `}</style>
 
-      {showAuth && <AuthModal onAuth={handleAuth} onClose={() => setShowAuth(false)} />}
+      {showAuth && <AuthModal onAuth={handleAuth} onClose={() => { setShowAuth(false); setPasswordResetToken(null); }} resetToken={passwordResetToken} />}
       <PwaInstallBanner />
 
       <div className="app-shell app-layout" style={{ maxWidth: 1230, margin: "0 auto", display: "flex", minHeight: "100vh", padding: isMobile ? 0 : "0 8px", width: "100%" }}>
@@ -1857,6 +1934,20 @@ export default function App() {
               )}
               <h1 style={{ fontSize: 20, fontWeight: 800, color: "#e7edf3" }}>{pageTitle}</h1>
             </div>
+            {!isMobile && (
+              <div style={{ flex: 1, maxWidth: 320, margin: "0 16px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, background: "#0d1117", border: "1px solid #1e2733", borderRadius: 9999, padding: "8px 14px" }}>
+                  <span style={{ color: "#4a5568" }}>🔍</span>
+                  <input
+                    value={searchQuery}
+                    onChange={e => { setSearchQuery(e.target.value); if (page !== "search") handleNavigate("search"); }}
+                    onFocus={() => { if (page !== "search") handleNavigate("search"); }}
+                    placeholder="Search users and posts…"
+                    style={{ background: "none", border: "none", outline: "none", color: "#e7edf3", fontSize: 14, flex: 1, fontFamily: "'Sora', sans-serif" }}
+                  />
+                </div>
+              </div>
+            )}
             <div style={{ fontSize: 11, fontFamily: "'DM Mono', monospace", color: "#4a5568", background: "#0d1117", border: "1px solid #1e2733", padding: "4px 10px", borderRadius: 6, letterSpacing: "0.05em" }}>v1.6.1</div>
           </div>
 
@@ -1878,7 +1969,7 @@ export default function App() {
               )}
             </>
           )}
-          {page === "search" && <SearchPage token={token} onNavigate={handleNavigate} />}
+          {page === "search" && <SearchPage token={token} onNavigate={handleNavigate} query={searchQuery} onQueryChange={setSearchQuery} />}
           {page === "hashtag" && <HashtagPage tag={pageParam} token={token} onNavigate={handleNavigate} currentUser={user} />}
           {page === "bookmarks" && <BookmarksPage token={token} onNavigate={handleNavigate} currentUser={user} />}
           {page === "notifications" && <NotificationsPage token={token} />}
