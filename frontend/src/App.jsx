@@ -1,7 +1,7 @@
 import AdminDashboard from "./components/AdminDashboard.jsx";
 import React, { useState, useEffect, useCallback, useRef } from "react";
 
-const API = "/api";
+const API = "https://labeouf-production.up.railway.app";
 const LABEL_CONFIG = {
   POSITIVE: { color: "#4ade80", bg: "rgba(74,222,128,0.1)", icon: "↑" },
   NEGATIVE: { color: "#f87171", bg: "rgba(248,113,113,0.1)", icon: "↓" },
@@ -34,6 +34,36 @@ const apiFetch = async (path, token, opts = {}) => {
   }
   return res.json();
 };
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = `${base64String}${padding}`.replace(/-/g, "+").replace(/_/g, "/");
+  const rawData = window.atob(base64);
+  return Uint8Array.from([...rawData].map(char => char.charCodeAt(0)));
+}
+
+async function registerPushNotifications(token) {
+  if (!token || typeof window === "undefined") return;
+  if (!("Notification" in window) || !("serviceWorker" in navigator) || !("PushManager" in window)) return;
+
+  const keyResponse = await apiFetch("/push/vapid-public-key", token);
+  if (!keyResponse.publicKey) return;
+
+  const permission = await Notification.requestPermission();
+  if (permission !== "granted") return;
+
+  const registration = await navigator.serviceWorker.register("/push-sw.js");
+  const existing = await registration.pushManager.getSubscription();
+  const subscription = existing || await registration.pushManager.subscribe({
+    userVisibleOnly: true,
+    applicationServerKey: urlBase64ToUint8Array(keyResponse.publicKey),
+  });
+
+  await apiFetch("/push/subscribe", token, {
+    method: "POST",
+    body: JSON.stringify(subscription),
+  });
+}
 
 function Avatar({ name, size = 40, url, onClick }) {
   const colors = ["#6366f1","#8b5cf6","#ec4899","#14b8a6","#f59e0b","#3b82f6"];
@@ -1438,6 +1468,7 @@ export default function App() {
         localStorage.setItem("lb_token", callbackToken);
         localStorage.setItem("lb_user", JSON.stringify(parsedUser));
         setToken(callbackToken); setUser(parsedUser);
+        registerPushNotifications(callbackToken).catch(() => {});
         window.history.replaceState({}, "", "/");
       } catch {}
       return;
@@ -1480,6 +1511,7 @@ export default function App() {
     localStorage.setItem("lb_token", tok);
     localStorage.setItem("lb_user", JSON.stringify(usr));
     setToken(tok); setUser(usr); setShowAuth(false);
+    registerPushNotifications(tok).catch(() => {});
   }, []);
 
   const handleSignOut = useCallback(() => {
