@@ -51,8 +51,8 @@ describe('UploadController', () => {
     await expect(stat(path)).resolves.toBeDefined();
   });
 
-  it('rejects images over 5MB and removes the uploaded file', async () => {
-    const path = await tempFile('too-large.png', 5 * 1024 * 1024 + 1);
+  it('rejects images over 10MB and removes the uploaded file', async () => {
+    const path = await tempFile('too-large.png', 10 * 1024 * 1024 + 1);
 
     await expect(
       controller.upload(

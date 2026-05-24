@@ -21,7 +21,7 @@ const UPLOAD_ROOT = process.env.UPLOAD_PATH || join(process.cwd(), 'uploads');
 
 const IMAGE_MIMES = new Set(['image/jpeg', 'image/png', 'image/gif', 'image/webp']);
 const VIDEO_MIMES = new Set(['video/mp4', 'video/webm', 'video/quicktime']);
-const IMAGE_MAX_BYTES = 5 * 1024 * 1024;
+const IMAGE_MAX_BYTES = 10 * 1024 * 1024;
 const VIDEO_MAX_BYTES = 50 * 1024 * 1024;
 const IMAGE_EXTS = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
 const VIDEO_EXTS = ['.mp4', '.webm', '.mov'];
@@ -186,7 +186,7 @@ export class UploadController {
     if (IMAGE_MIMES.has(file.mimetype)) {
       if (size > IMAGE_MAX_BYTES) {
         await unlink(file.path).catch(() => {});
-        throw new BadRequestException('Image must be 5MB or smaller');
+        throw new BadRequestException('Image must be 10MB or smaller');
       }
     } else if (VIDEO_MIMES.has(file.mimetype)) {
       if (size > VIDEO_MAX_BYTES) {
