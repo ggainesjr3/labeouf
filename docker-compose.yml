@@ -1,18 +1,17 @@
 services:
   db:
     image: postgres:15-alpine
-    # Must bind 0.0.0.0 (not 127.0.0.1) if backend uses db — that resolves to docker0, not loopback.
     ports:
       - "127.0.0.1:5432:5432"
     environment:
-      POSTGRES_USER: gary_admin
-      POSTGRES_PASSWORD: [REDACTED]
-      POSTGRES_DB: labeouf_vault
-      TZ: America/New_York
+      POSTGRES_USER: ${POSTGRES_USER:-gary_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_DB: ${POSTGRES_DB:-labeouf_vault}
+      TZ: ${TZ:-America/New_York}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U gary_admin -d labeouf_vault"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-gary_admin} -d ${POSTGRES_DB:-labeouf_vault}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -20,36 +19,41 @@ services:
   backend:
     build: ./backend
     ports:
-      - "3001:3001"
-    extra_hosts:
-      - "db:host-gateway"
+      - "${BACKEND_HOST_PORT:-3001}:3001"
     depends_on:
       db:
         condition: service_healthy
     environment:
-      # Use host loopback when container-to-container bridge traffic is blocked (iptables/Tailscale).
       DATABASE_HOST: db
       DATABASE_PORT: 5432
-      DATABASE_USER: gary_admin
-      DATABASE_PASSWORD: [REDACTED]
-      DATABASE_NAME: labeouf_vault
-      TZ: America/New_York
-      WEBHOOK_URL: ""
-      ALLOWED_ORIGIN: http://localhost
-      JWT_SECRET: [REDACTED]
-      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
-      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
-      GOOGLE_CALLBACK_URL: http://localhost:3001/auth/google/callback
-      OPENAI_API_KEY: ""
-      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY}
-      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY}
-      TYPEORM_SYNCHRONIZE: "true"
-      TYPEORM_MIGRATIONS_RUN: "false"
+      DATABASE_USER: ${DATABASE_USER:-gary_admin}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD:?DATABASE_PASSWORD is required}
+      DATABASE_NAME: ${DATABASE_NAME:-labeouf_vault}
+      TZ: ${TZ:-America/New_York}
+      WEBHOOK_URL: ${WEBHOOK_URL:-}
+      ALLOWED_ORIGIN: ${ALLOWED_ORIGIN:-http://localhost:8080}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:8080}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GOOGLE_CALLBACK_URL: ${GOOGLE_CALLBACK_URL:-http://localhost:3001/auth/google/callback}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-}
+      TYPEORM_SYNCHRONIZE: ${TYPEORM_SYNCHRONIZE:-false}
+      TYPEORM_MIGRATIONS_RUN: ${TYPEORM_MIGRATIONS_RUN:-true}
 
   frontend:
-    build: ./frontend
+    build:
+      context: ./frontend
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:3001}
     ports:
-      - "80:80"
+      - "${FRONTEND_HOST_PORT:-8080}:80"
+    environment:
+      SERVER_NAME: ${SERVER_NAME:-_}
+      BACKEND_URL: ${BACKEND_URL:-http://backend:3001}
     depends_on:
       - backend
 

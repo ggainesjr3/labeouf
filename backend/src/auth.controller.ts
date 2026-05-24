@@ -38,7 +38,12 @@ export class AuthController {
       displayName: user.displayName,
       avatarUrl: user.avatarUrl,
     }));
-    const frontendUrl = process.env.FRONTEND_URL ?? process.env.ALLOWED_ORIGIN ?? 'http://localhost:8080';
+    const frontendUrl =
+      process.env.FRONTEND_URL ??
+      process.env.ALLOWED_ORIGIN?.split(',')[0]?.trim();
+    if (!frontendUrl) {
+      throw new Error('FRONTEND_URL or ALLOWED_ORIGIN must be set for Google OAuth redirect');
+    }
     res.redirect(`${frontendUrl}/?token=${token}&user=${userData}`);
   }
 }

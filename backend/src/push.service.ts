@@ -33,7 +33,7 @@ export class PushService {
     if (!publicKey || !privateKey) return;
 
     webpush.setVapidDetails(
-      process.env.VAPID_SUBJECT || 'mailto:admin@labeouf.local',
+      process.env.VAPID_SUBJECT || 'mailto:admin@example.com',
       publicKey,
       privateKey,
     );

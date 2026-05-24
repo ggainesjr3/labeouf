@@ -18,6 +18,7 @@ import { ModerationLogController } from './moderation-log.controller';
 import { HealthController } from './health.controller';
 import { PushController } from './push.controller';
 import { typeOrmModuleConfig, entities } from './database.config';
+import { getRequiredEnv } from './config/env';
 
 import { MaintenanceService } from './maintenance.service';
 import { NotificationService } from './notification.service';
@@ -42,9 +43,11 @@ import { AdminNotFoundGuard } from './admin-not-found.guard';
     ScheduleModule.forRoot(),
     HttpModule,
     PassportModule,
-    JwtModule.register({
-      secret: process.env.JWT_SECRET ?? '[REDACTED]',
-      signOptions: { expiresIn: '7d' },
+    JwtModule.registerAsync({
+      useFactory: () => ({
+        secret: getRequiredEnv('JWT_SECRET'),
+        signOptions: { expiresIn: '7d' },
+      }),
     }),
     TypeOrmModule.forRoot(typeOrmModuleConfig),
     TypeOrmModule.forFeature(entities),
