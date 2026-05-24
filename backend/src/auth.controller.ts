@@ -1,9 +1,11 @@
-import { Controller, Post, Get, Body, HttpCode, HttpStatus, UseGuards, Req, Res } from '@nestjs/common';
+import { Controller, Post, Get, Body, HttpCode, HttpStatus, UseGuards, Req, Res, BadRequestException } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { AuthGuard } from '@nestjs/passport';
 import { JwtService } from '@nestjs/jwt';
 import { AuthService } from './auth.service';
 
 @Controller('auth')
+@Throttle({ default: { limit: 5, ttl: 60000 } })
 export class AuthController {
   constructor(
     private readonly authService: AuthService,
@@ -12,15 +14,33 @@ export class AuthController {
 
   @Post('register')
   async register(
-    @Body() body: { username: string; password: string; displayName?: string },
+    @Body() body: { email: string; username: string; password: string; displayName?: string },
   ) {
-    return this.authService.register(body.username, body.password, body.displayName);
+    return this.authService.register(body.email, body.username, body.password, body.displayName);
   }
 
   @Post('login')
   @HttpCode(HttpStatus.OK)
-  async login(@Body() body: { username: string; password: string }) {
-    return this.authService.login(body.username, body.password);
+  async login(@Body() body: { email?: string; username?: string; password: string }) {
+    if (body.email) {
+      return this.authService.login(body.email, body.password);
+    }
+    if (body.username) {
+      return this.authService.loginWithUsername(body.username, body.password);
+    }
+    throw new BadRequestException('Email or username required');
+  }
+
+  @Post('forgot-password')
+  @HttpCode(HttpStatus.OK)
+  async forgotPassword(@Body() body: { email: string }) {
+    return this.authService.forgotPassword(body.email);
+  }
+
+  @Post('reset-password')
+  @HttpCode(HttpStatus.OK)
+  async resetPassword(@Body() body: { token: string; newPassword: string }) {
+    return this.authService.resetPassword(body.token, body.newPassword);
   }
 
   @Get('google')

@@ -1,9 +1,11 @@
 import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { ScheduleModule } from '@nestjs/schedule';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { HttpModule } from '@nestjs/axios';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 
 import { AppController } from './app.controller';
 import { AdminController } from './admin.controller';
@@ -18,6 +20,7 @@ import { ReportsController } from './reports.controller';
 import { ModerationLogController } from './moderation-log.controller';
 import { HealthController } from './health.controller';
 import { PushController } from './push.controller';
+import { SearchController } from './search.controller';
 import { typeOrmModuleConfig, entities } from './database.config';
 import { getRequiredEnv } from './config/env';
 
@@ -32,6 +35,7 @@ import { BookmarksService } from './bookmarks.service';
 import { ReportsService } from './reports.service';
 import { ModerationLogService } from './moderation-log.service';
 import { PushService } from './push.service';
+import { SearchService } from './search.service';
 import { BrainService } from './brain.service';
 import { JwtStrategy } from './jwt.strategy';
 import { GoogleStrategy } from './google.strategy';
@@ -42,6 +46,7 @@ import { AdminNotFoundGuard } from './admin-not-found.guard';
 @Module({
   imports: [
     ScheduleModule.forRoot(),
+    ThrottlerModule.forRoot([{ ttl: 60000, limit: 100 }]),
     HttpModule,
     PassportModule,
     JwtModule.registerAsync({
@@ -67,8 +72,10 @@ import { AdminNotFoundGuard } from './admin-not-found.guard';
     ModerationLogController,
     HealthController,
     PushController,
+    SearchController,
   ],
   providers: [
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
     MaintenanceService,
     NotificationService,
     AuthService,
@@ -80,6 +87,7 @@ import { AdminNotFoundGuard } from './admin-not-found.guard';
     ReportsService,
     ModerationLogService,
     PushService,
+    SearchService,
     BrainService,
     JwtStrategy,
     ...(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET ? [GoogleStrategy] : []),

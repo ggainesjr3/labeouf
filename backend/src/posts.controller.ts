@@ -1,4 +1,5 @@
 import { Controller, Post, Get, Delete, Body, Param, UseGuards, Request, ParseIntPipe } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { AuthGuard } from '@nestjs/passport';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { AdminGuard } from './admin.guard';
@@ -14,6 +15,7 @@ export class PostsController {
 
   @Post()
   @UseGuards(AuthGuard('jwt'))
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   async createPost(@Request() req, @Body() body: { text: string; imageUrl?: string; videoUrl?: string }) {
     const auditResult = await this.brainService.analyze(body.text);
     return this.postsService.createPost(req.user.id, body.text, auditResult, body.imageUrl, body.videoUrl);
