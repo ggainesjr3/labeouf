@@ -1,0 +1,4 @@
+literal:password123==>[REDACTED]
+literal:labeouf-secret-change-in-prod==>[REDACTED]
+regex:GOCSPX-[A-Za-z0-9_-]+==>[REDACTED]
+regex:AIzaSy[A-Za-z0-9_-]+==>[REDACTED]
