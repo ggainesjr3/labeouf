@@ -37,6 +37,7 @@ export class AuthController {
       username: user.username,
       displayName: user.displayName,
       avatarUrl: user.avatarUrl,
+      role: user.role,
     }));
     const frontendUrl =
       process.env.FRONTEND_URL ??

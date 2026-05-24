@@ -1,6 +1,6 @@
 import AdminDashboard from "./components/AdminDashboard.jsx";
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { API_BASE as API } from "./apiBase.js";
+import { API_BASE as API, mediaUrl } from "./apiBase.js";
 const LABEL_CONFIG = {
   POSITIVE: { color: "#4ade80", bg: "rgba(74,222,128,0.1)", icon: "↑" },
   NEGATIVE: { color: "#f87171", bg: "rgba(248,113,113,0.1)", icon: "↓" },
@@ -303,12 +303,12 @@ export function PostCard({ post, token, onNavigate, currentUser, onBookmarkChang
           </p>
           {post.imageUrl && (
             <div style={{ margin: "0 0 10px", borderRadius: 12, overflow: "hidden", border: "1px solid #1e2733", maxWidth: "min(100%, 520px)" }}>
-              <img src={post.imageUrl} alt="" style={{ width: "100%", display: "block", maxHeight: 360, objectFit: "cover" }} />
+              <img src={mediaUrl(post.imageUrl)} alt="" style={{ width: "100%", display: "block", maxHeight: 360, objectFit: "cover" }} />
             </div>
           )}
           {post.videoUrl && (
             <div style={{ margin: "0 0 10px", borderRadius: 12, overflow: "hidden", border: "1px solid #1e2733", maxWidth: "min(100%, 500px)" }}>
-              <video src={post.videoUrl} controls playsInline style={{ width: "100%", display: "block", maxWidth: 500 }} />
+              <video src={mediaUrl(post.videoUrl)} controls playsInline style={{ width: "100%", display: "block", maxWidth: 500 }} />
             </div>
           )}
           <div style={{ display: "flex", gap: 4, marginBottom: 8 }}>
@@ -501,12 +501,12 @@ export function Composer({ token, onPost }) {
       let imageUrl;
       if (pendingImage) {
         const { url } = await uploadFile(pendingImage, "image");
-        imageUrl = url;
+        imageUrl = mediaUrl(url);
       }
       let videoUrl;
       if (pendingVideo) {
         const { url } = await uploadFile(pendingVideo, "video");
-        videoUrl = url;
+        videoUrl = mediaUrl(url);
       }
       const body = { text: text.trim() };
       if (imageUrl) body.imageUrl = imageUrl;
@@ -875,19 +875,28 @@ function MessagesPage({ token, currentUser, onNavigate }) {
   useEffect(() => {
     if (!activeThread || !token) return;
     let cancelled = false;
-    setThreadError(null);
-    apiFetch(`/messages/${activeThread.id}`, token)
-      .then(data => {
-        if (!cancelled) setMessages(data);
-      })
-      .catch(e => {
-        if (!cancelled) {
-          setMessages([]);
-          setThreadError(e.message || "Could not load this conversation.");
-        }
-      });
+
+    const loadThread = () => {
+      apiFetch(`/messages/${activeThread.id}`, token)
+        .then(data => {
+          if (!cancelled) {
+            setMessages(data);
+            setThreadError(null);
+          }
+        })
+        .catch(e => {
+          if (!cancelled) {
+            setMessages([]);
+            setThreadError(e.message || "Could not load this conversation.");
+          }
+        });
+    };
+
+    loadThread();
+    const interval = setInterval(loadThread, 3000);
     return () => {
       cancelled = true;
+      clearInterval(interval);
     };
   }, [activeThread, token, retryKey]);
 
@@ -901,7 +910,7 @@ function MessagesPage({ token, currentUser, onNavigate }) {
         .catch(() => {});
     }, 300);
     return () => clearTimeout(t);
-  }, [searchQuery]);
+  }, [searchQuery, token, currentUser?.username]);
 
   const handleSend = async () => {
     if (!messageText.trim() || !activeThread || sending) return;
@@ -1461,23 +1470,47 @@ export default function App() {
     const params = new URLSearchParams(window.location.search);
     const callbackToken = params.get("token");
     const callbackUser = params.get("user");
-    if (callbackToken && callbackUser) {
+
+    const finishOAuth = async () => {
+      if (!callbackToken) {
+        const savedToken = localStorage.getItem("lb_token");
+        const savedUser = localStorage.getItem("lb_user");
+        if (savedToken && savedUser) {
+          try {
+            setToken(savedToken);
+            setUser(JSON.parse(savedUser));
+          } catch {
+            localStorage.removeItem("lb_token");
+            localStorage.removeItem("lb_user");
+          }
+        }
+        return;
+      }
+
       try {
-        const parsedUser = JSON.parse(decodeURIComponent(callbackUser));
         localStorage.setItem("lb_token", callbackToken);
+        setToken(callbackToken);
+
+        let parsedUser = null;
+        if (callbackUser) {
+          parsedUser = JSON.parse(decodeURIComponent(callbackUser));
+        } else {
+          parsedUser = await apiFetch("/users/me", callbackToken);
+        }
+
         localStorage.setItem("lb_user", JSON.stringify(parsedUser));
-        setToken(callbackToken); setUser(parsedUser);
+        setUser(parsedUser);
         registerPushNotifications(callbackToken).catch(() => {});
-        window.history.replaceState({}, "", "/");
-      } catch {}
-      return;
-    }
-    const savedToken = localStorage.getItem("lb_token");
-    const savedUser = localStorage.getItem("lb_user");
-    if (savedToken && savedUser) {
-      try { setToken(savedToken); setUser(JSON.parse(savedUser)); }
-      catch { localStorage.removeItem("lb_token"); localStorage.removeItem("lb_user"); }
-    }
+      } catch (err) {
+        console.error("Google OAuth callback failed:", err);
+        localStorage.removeItem("lb_token");
+        localStorage.removeItem("lb_user");
+      } finally {
+        window.history.replaceState({}, "", window.location.pathname || "/");
+      }
+    };
+
+    finishOAuth();
   }, []);
 
   useEffect(() => {
