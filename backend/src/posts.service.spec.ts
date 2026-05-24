@@ -19,6 +19,14 @@ describe('PostsService', () => {
     sendLikeNotification: jest.fn(),
     sendFollowNotification: jest.fn(),
   };
+  const notificationService = {
+    notifyLike: jest.fn(),
+    notifyFollow: jest.fn(),
+    notifyReply: jest.fn(),
+  };
+  const userRepository = {
+    findOne: jest.fn(),
+  };
 
   let service: PostsService;
 
@@ -36,8 +44,10 @@ describe('PostsService', () => {
       replyRepository as any,
       repostRepository as any,
       bookmarkRepository as any,
+      userRepository as any,
       moderationLogService as any,
       pushService as any,
+      notificationService as any,
     );
     jest.spyOn(service, 'moderateText').mockResolvedValue(undefined);
   });

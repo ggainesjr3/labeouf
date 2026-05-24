@@ -2,17 +2,29 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Message } from './message.entity';
+import { User } from './user.entity';
+import { NotificationService } from './notification.service';
 
 @Injectable()
 export class MessagesService {
   constructor(
     @InjectRepository(Message)
     private messageRepository: Repository<Message>,
+    @InjectRepository(User)
+    private userRepository: Repository<User>,
+    private readonly notificationService: NotificationService,
   ) {}
 
   async sendMessage(senderId: number, recipientId: number, text: string): Promise<Message> {
     const msg = this.messageRepository.create({ senderId, recipientId, text });
-    return this.messageRepository.save(msg);
+    const saved = await this.messageRepository.save(msg);
+    if (senderId !== recipientId) {
+      const sender = await this.userRepository.findOne({ where: { id: senderId } });
+      if (sender) {
+        await this.notificationService.notifyMessage(recipientId, sender.username);
+      }
+    }
+    return saved;
   }
 
   async getConversation(userId: number, otherUserId: number): Promise<Message[]> {

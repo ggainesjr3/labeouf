@@ -11,6 +11,8 @@ import { Repost } from './repost.entity';
 import { Bookmark } from './bookmark.entity';
 import { ModerationLogService } from './moderation-log.service';
 import { PushService } from './push.service';
+import { NotificationService } from './notification.service';
+import { User } from './user.entity';
 
 @Injectable()
 export class PostsService {
@@ -21,8 +23,10 @@ export class PostsService {
     @InjectRepository(Reply) private replyRepository: Repository<Reply>,
     @InjectRepository(Repost) private repostRepository: Repository<Repost>,
     @InjectRepository(Bookmark) private bookmarkRepository: Repository<Bookmark>,
+    @InjectRepository(User) private userRepository: Repository<User>,
     private readonly moderationLogService: ModerationLogService,
     private readonly pushService: PushService,
+    private readonly notificationService: NotificationService,
   ) {}
 
   async createPost(authorId: number, text: string, auditMetadata: any, imageUrl?: string, videoUrl?: string): Promise<Post> {
@@ -171,6 +175,10 @@ export class PostsService {
       await this.likeRepository.save(this.likeRepository.create({ userId, postId }));
       post.likeCount += 1;
       await this.pushService.sendLikeNotification(post.authorId, userId, postId);
+      const actor = await this.userRepository.findOne({ where: { id: userId } });
+      if (actor) {
+        await this.notificationService.notifyLike(post.authorId, actor.username);
+      }
     }
     await this.postRepository.save(post);
     return { liked: !existing, likeCount: post.likeCount };
@@ -202,6 +210,10 @@ export class PostsService {
     } else {
       await this.followRepository.save(this.followRepository.create({ followerId, followingId }));
       await this.pushService.sendFollowNotification(followingId, followerId);
+      const actor = await this.userRepository.findOne({ where: { id: followerId } });
+      if (actor) {
+        await this.notificationService.notifyFollow(followingId, actor.username);
+      }
       return { following: true };
     }
   }
@@ -212,7 +224,14 @@ export class PostsService {
     const post = await this.postRepository.findOne({ where: { id: postId } });
     if (!post) throw new NotFoundException('Post not found');
     const reply = this.replyRepository.create({ authorId, postId, text, auditMetadata });
-    return this.replyRepository.save(reply);
+    const saved = await this.replyRepository.save(reply);
+    if (post.authorId !== authorId) {
+      const actor = await this.userRepository.findOne({ where: { id: authorId } });
+      if (actor) {
+        await this.notificationService.notifyReply(post.authorId, actor.username);
+      }
+    }
+    return saved;
   }
 
   async getReplies(postId: number): Promise<Reply[]> {
