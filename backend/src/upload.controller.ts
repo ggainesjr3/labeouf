@@ -9,13 +9,14 @@ import {
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { diskStorage } from 'multer';
+import { diskStorage, memoryStorage } from 'multer';
 import { existsSync, mkdirSync } from 'fs';
-import { readFile, stat, unlink } from 'fs/promises';
+import { readFile, unlink } from 'fs/promises';
 import { extname, join } from 'path';
 import axios from 'axios';
 import { randomUUID } from 'crypto';
 import { ModerationLogService } from './moderation-log.service';
+import { isR2Configured, uploadToR2 } from './r2-storage';
 
 const UPLOAD_ROOT = process.env.UPLOAD_PATH || join(process.cwd(), 'uploads');
 
@@ -27,6 +28,19 @@ const IMAGE_EXTS = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
 const VIDEO_EXTS = ['.mp4', '.webm', '.mov'];
 
 const VISION_ANNOTATE = 'https://vision.googleapis.com/v1/images:annotate';
+
+type UploadedFileShape = {
+  filename: string;
+  mimetype: string;
+  size: number;
+  path?: string;
+  buffer?: Buffer;
+};
+
+function uniqueFilename(originalname: string): string {
+  const ext = extname(originalname).toLowerCase();
+  return `${randomUUID()}${ext}`;
+}
 
 function likelihoodScore(label: string | undefined): number {
   const map: Record<string, number> = {
@@ -46,6 +60,12 @@ function ensureUploadDir() {
   }
 }
 
+async function removeLocalFile(file: UploadedFileShape): Promise<void> {
+  if (file.path) {
+    await unlink(file.path).catch(() => {});
+  }
+}
+
 @Controller('upload')
 export class UploadController {
   constructor(private readonly moderationLogService: ModerationLogService) {}
@@ -55,11 +75,11 @@ export class UploadController {
    */
   private async moderateImage(
     uploaderId: number,
-    file: { path: string; filename: string },
+    file: UploadedFileShape,
     apiKey: string,
   ): Promise<void> {
     const contentId = randomUUID();
-    const buf = await readFile(file.path);
+    const buf = file.buffer ?? (await readFile(file.path!));
     const base64 = buf.toString('base64');
 
     const { data } = await axios.post(
@@ -88,7 +108,7 @@ export class UploadController {
         confidence: null,
         rawResult: { visionResponse: data, error: err } as Record<string, unknown>,
       });
-      await unlink(file.path).catch(() => {});
+      await removeLocalFile(file);
       throw new BadRequestException('Image moderation failed');
     }
 
@@ -115,7 +135,7 @@ export class UploadController {
         confidence,
         rawResult,
       });
-      await unlink(file.path).catch(() => {});
+      await removeLocalFile(file);
       throw new BadRequestException('Image not allowed');
     }
 
@@ -135,17 +155,17 @@ export class UploadController {
   @UseGuards(AuthGuard('jwt'))
   @UseInterceptors(
     FileInterceptor('file', {
-      storage: diskStorage({
-        destination: (_req, _file, cb) => {
-          ensureUploadDir();
-          cb(null, UPLOAD_ROOT);
-        },
-        filename: (_req, file, cb) => {
-          const ext = extname(file.originalname).toLowerCase();
-          const name = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}${ext}`;
-          cb(null, name);
-        },
-      }),
+      storage: isR2Configured()
+        ? memoryStorage()
+        : diskStorage({
+            destination: (_req, _file, cb) => {
+              ensureUploadDir();
+              cb(null, UPLOAD_ROOT);
+            },
+            filename: (_req, file, cb) => {
+              cb(null, uniqueFilename(file.originalname));
+            },
+          }),
       limits: { fileSize: VIDEO_MAX_BYTES },
       fileFilter: (_req, file, cb) => {
         const ext = extname(file.originalname).toLowerCase();
@@ -176,21 +196,32 @@ export class UploadController {
   )
   async upload(
     @Req() req: { user: { id: number } },
-    @UploadedFile() file?: { filename: string; path: string; mimetype: string },
+    @UploadedFile() raw?: Express.Multer.File,
   ) {
-    if (!file?.filename || !file.path) {
+    if (!raw) {
       throw new BadRequestException('No file uploaded');
     }
 
-    const { size } = await stat(file.path);
+    const useR2 = isR2Configured();
+    const filename =
+      useR2 ? uniqueFilename(raw.originalname) : raw.filename || uniqueFilename(raw.originalname);
+
+    const file: UploadedFileShape = {
+      filename,
+      mimetype: raw.mimetype,
+      size: raw.size,
+      path: raw.path,
+      buffer: raw.buffer,
+    };
+
     if (IMAGE_MIMES.has(file.mimetype)) {
-      if (size > IMAGE_MAX_BYTES) {
-        await unlink(file.path).catch(() => {});
+      if (file.size > IMAGE_MAX_BYTES) {
+        await removeLocalFile(file);
         throw new BadRequestException('Image must be 10MB or smaller');
       }
     } else if (VIDEO_MIMES.has(file.mimetype)) {
-      if (size > VIDEO_MAX_BYTES) {
-        await unlink(file.path).catch(() => {});
+      if (file.size > VIDEO_MAX_BYTES) {
+        await removeLocalFile(file);
         throw new BadRequestException('Video must be 50MB or smaller');
       }
     }
@@ -213,15 +244,26 @@ export class UploadController {
             rawResult: { error: String(e) } as Record<string, unknown>,
           })
           .catch(() => {});
-        await unlink(file.path).catch(() => {});
+        await removeLocalFile(file);
         throw new BadRequestException('Image moderation failed');
       }
     }
 
+    let url: string;
+    if (useR2) {
+      const body = file.buffer ?? (await readFile(file.path!));
+      url = await uploadToR2(filename, body, file.mimetype);
+    } else {
+      if (!file.path) {
+        throw new BadRequestException('Upload failed');
+      }
+      url = `/uploads/${filename}`;
+    }
+
     return {
-      url: `/uploads/${file.filename}`,
+      url,
       type: IMAGE_MIMES.has(file.mimetype) ? 'image' : 'video',
-      size,
+      size: file.size,
     };
   }
 }

@@ -7,12 +7,15 @@ import { NestExpressApplication } from '@nestjs/platform-express';
 import { join } from 'path';
 import { AppModule } from './app.module';
 import { getCorsOrigins } from './config/env';
+import { isR2Configured } from './r2-storage';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
-  const uploadRoot = process.env.UPLOAD_PATH || join(process.cwd(), 'uploads');
-  app.useStaticAssets(uploadRoot, { prefix: '/uploads/' });
+  if (!isR2Configured()) {
+    const uploadRoot = process.env.UPLOAD_PATH || join(process.cwd(), 'uploads');
+    app.useStaticAssets(uploadRoot, { prefix: '/uploads/' });
+  }
 
   app.enableCors({
     origin: getCorsOrigins(),
