@@ -1244,7 +1244,7 @@ function AuthModal({ onAuth, onClose }) {
           <div style={{ fontSize: 32, marginBottom: 8 }}>⚡</div>
           <h2 style={{ margin: 0, color: "#e7edf3", fontFamily: "'Sora', sans-serif", fontWeight: 800 }}>{mode === "login" ? "Sign in to LaBeouf" : "Join LaBeouf"}</h2>
         </div>
-        <button onClick={() => { window.location.href = "/api/auth/google"; }} style={{ width: "100%", background: "#fff", color: "#1a1a1a", border: "none", borderRadius: 9999, padding: "12px", fontSize: 15, fontWeight: 600, cursor: "pointer", fontFamily: "'Sora', sans-serif", display: "flex", alignItems: "center", justifyContent: "center", gap: 10, marginBottom: 20 }}
+        <button onClick={() => { window.location.href = "https://labeouf-production.up.railway.app/auth/google"; }} style={{ width: "100%", background: "#fff", color: "#1a1a1a", border: "none", borderRadius: 9999, padding: "12px", fontSize: 15, fontWeight: 600, cursor: "pointer", fontFamily: "'Sora', sans-serif", display: "flex", alignItems: "center", justifyContent: "center", gap: 10, marginBottom: 20 }}
           onMouseEnter={e => e.currentTarget.style.background = "#e8e8e8"}
           onMouseLeave={e => e.currentTarget.style.background = "#fff"}
         >
