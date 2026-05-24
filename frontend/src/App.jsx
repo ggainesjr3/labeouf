@@ -1839,6 +1839,7 @@ export default function App() {
       `}</style>
 
       {showAuth && <AuthModal onAuth={handleAuth} onClose={() => setShowAuth(false)} />}
+      <PwaInstallBanner />
 
       <div className="app-shell app-layout" style={{ maxWidth: 1230, margin: "0 auto", display: "flex", minHeight: "100vh", padding: isMobile ? 0 : "0 8px", width: "100%" }}>
         <div className="left-sidebar" style={{ width: 260, flexShrink: 0, padding: "12px 12px 12px 0", display: "flex", flexDirection: "column", position: "sticky", top: 0, height: "100vh" }}>
